@@ -32,6 +32,7 @@ place. Pantauin surfaces these as an actionable remediation report.
 - Combines gambling injection detection + passive vuln surface in one report
 - Indonesian-context keyword lists (bahasa Indonesia gambling terms)
 - Evidence snapshots (Playwright screenshot + timestamp) per finding — court-admissible
+- CVSS-lite numeric scores per finding for prioritisation
 
 ---
 
@@ -39,15 +40,15 @@ place. Pantauin surfaces these as an actionable remediation report.
 
 | Layer | Tech | Notes |
 |---|---|---|
-| Frontend | React 18 + Tailwind CSS (Vite) | Dark theme, consistent with IntelID |
+| Frontend | React 18 + Tailwind CSS (Vite) | Dark theme |
 | Backend API | FastAPI (Python 3.11+) | Async, Pydantic v2 |
 | Scraping | Playwright (async) | Screenshots + JS-rendered pages |
 | HTTP probing | httpx | Header analysis, path probing |
 | Search | Google Custom Search API | Dork queries for gambling keywords |
 | NLP/matching | Regex + keyword lists | Bahasa Indonesia gambling terms |
-| Database | SQLite (local dev) → PostgreSQL (prod) | Scan result caching |
-| PDF Export | WeasyPrint | Formatted security reports |
-| Task Queue | Celery + Redis (Phase 2) | Parallel domain scanning |
+| Database | SQLite (local dev) → PostgreSQL (prod, asyncpg) | Scan result storage |
+| PDF Export | WeasyPrint | Print-optimised white-background reports |
+| Task Queue | Celery + Redis | Parallel domain scanning |
 | Deployment | Docker Compose → Fly.io | |
 
 ---
@@ -62,7 +63,6 @@ Google CSE dork queries against target namespace:
 - `site:.go.id "judi online"`
 - `site:.go.id "slot gacor"`
 - `site:.go.id "togel"`
-- `site:.go.id "situs slot"`
 - `site:.ac.id "judi"`
 - etc. (full keyword list in `scanner/keywords.py`)
 
@@ -77,8 +77,8 @@ For each flagged URL from Method A (or user-supplied domain):
 - Extract injected `<a>` tags (hidden links, keyword-stuffed anchors)
 - Detect `<meta>` redirect or JS redirect to gambling domains
 
-Returns: per-page finding with severity (critical/high/medium), evidence text,
-screenshot path, detected keywords, injected link samples.
+Returns: per-page finding with severity, evidence text, screenshot path,
+detected keywords, injected link samples, CVSS-lite score.
 
 ### Module 2 — Passive Vulnerability Surface
 Passive (non-intrusive) checks only — no active exploitation.
@@ -119,21 +119,36 @@ For every confirmed finding (gambling injection or critical vuln surface):
 
 ```
 React Frontend
-    REST (polling /scan/{id}/status every 2s)
+    REST (polling /scan/{id} every 2s)
 FastAPI Backend
-    POST /scan         — start a scan job (domain or TLD sweep)
-    GET  /scan/{id}    — poll status + partial results
-    GET  /scan/{id}/report — export HTML/PDF report
-    dispatches async scan tasks per module
-    each module writes results to DB as it completes
+    POST /scan              — start a scan job (single domain or TLD sweep)
+    GET  /scan/{id}         — poll status + partial results + children
+    GET  /scans             — paginated scan history
+    GET  /scan/{id}/report  — export HTML report
+    GET  /scan/{id}/report/pdf — export PDF report (WeasyPrint)
+    dispatches Celery tasks, each module writes results to DB as it completes
     evidence files stored in backend/evidence/{scan_id}/
 
-Scan Pipeline (sequential for MVP, Celery in Phase 2):
-    1. dork_sweep      — Google CSE → flagged URLs
-    2. page_crawl      — Playwright → per-page injection analysis + screenshot
-    3. header_probe    — httpx → security header grades
-    4. path_probe      — httpx → exposed paths
-    5. cms_fingerprint — httpx → CMS detection
+Celery Worker (separate process/container)
+    scan_tasks.run_scan       — single domain: runs full 5-module pipeline
+    tld_sweep_tasks.run_tld_sweep — TLD sweep: dork namespace, dispatch child run_scan per domain
+
+Scan Pipeline (scanner/pipeline.py — module registry pattern):
+    PIPELINE = [dork_sweep, page_crawl, header_probe, path_probe, cms_detect]
+    Generic runner loop — adding a new module = create file + append to PIPELINE list
+    Each module error is caught individually; one failure does not abort the scan
+
+CVSS-lite scoring (scanner/scoring.py):
+    Computed in _save_findings for every finding
+    Base score from severity label → module-specific override → evidence modifiers
+    Stored as Finding.cvss_score (float, 0.0–10.0)
+
+Infrastructure (docker-compose):
+    postgres:16-alpine  — persistent storage (healthcheck gated)
+    redis:7-alpine      — Celery broker + result backend
+    backend             — FastAPI (uvicorn)
+    celery_worker       — Celery worker (concurrency=4)
+    frontend            — Vite dev server
 ```
 
 ---
@@ -142,32 +157,53 @@ Scan Pipeline (sequential for MVP, Celery in Phase 2):
 
 | Input | Example | Behavior |
 |---|---|---|
-| Single domain | `bkn.go.id` | Scan that domain only |
-| TLD sweep | `.go.id` | Dork sweep entire namespace, crawl all hits |
-| Ministry prefix | `kemenkeu.go.id` | Scan domain + all known subdomains |
-| Custom dork | `site:go.id "slot gacor"` | Direct dork, crawl hits |
+| Single domain | `bkn.go.id` | Full 5-module pipeline scan |
+| TLD sweep | `.go.id` | Dork sweep entire namespace, dispatch child scan per unique domain (max 50) |
+
+Input starting with `.` is auto-detected as TLD sweep mode in both frontend and backend.
+
+---
+
+## API Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/scan` | Start scan. Body: `{"domain": "bkn.go.id"}`. Returns `{"scan_id": "..."}` |
+| GET | `/api/scan/{id}` | Poll scan status, findings, module progress, child scans |
+| GET | `/api/scans` | Scan history. Query params: `page`, `limit`, `status`, `domain` |
+| GET | `/api/scan/{id}/report` | Download HTML report |
+| GET | `/api/scan/{id}/report/pdf` | Download PDF report |
+| GET | `/api/keywords` | List discovered keywords |
+| GET | `/api/keywords/stats` | Keyword stats |
+| PATCH | `/api/keywords/{id}/approve` | Approve auto-discovered keyword |
+| PATCH | `/api/keywords/{id}/reject` | Reject auto-discovered keyword |
 
 ---
 
 ## Project Phases
 
-### Phase 1 — MVP (BUILD FIRST)
-Scope: single domain scan
-1. FastAPI backend with sequential async scan pipeline
-2. Modules: dork_sweep + page_crawl (gambling detection only)
-3. React frontend: DomainInput → scan progress → FindingCards
-4. Evidence screenshots saved locally
-5. Basic HTML report export
+### Phase 1 — MVP ✓ COMPLETE
 
-### Phase 2 — TLD Sweep + Full Vuln Surface
-- TLD sweep mode (.go.id / .ac.id namespace)
-- header_probe + path_probe + cms_fingerprint modules
-- Celery + Redis for parallel domain scanning
-- Severity scoring system (CVSS-lite)
-- Full PDF report (WeasyPrint)
+- FastAPI backend with async scan pipeline
+- All 5 scanner modules: dork_sweep, page_crawl, header_probe, path_probe, cms_detect
+- React frontend: scan input → progress → FindingCards with severity badges
+- Evidence screenshots + SHA256 hashing
+- HTML report export
+- Keyword auto-discovery system
+
+### Phase 2 — TLD Sweep + Full Vuln Surface ✓ COMPLETE
+
+- Celery + Redis task queue (replaces BackgroundTasks)
+- Module registry pattern (scanner/pipeline.py)
+- TLD sweep mode with parallel child scan dispatch
+- Scan history endpoint with pagination and finding counts
+- PDF report export (WeasyPrint, print-optimised)
+- CVSS-lite numeric severity scoring (0.0–10.0)
+- PostgreSQL support (asyncpg); docker-compose auto-injects prod URL
 
 ### Phase 3 — Dashboard + BSSN Integration
-- Persistent scan history dashboard
+
+- Persistent scan history dashboard (History.jsx exists, needs data wiring)
 - Trend tracking (same domain scanned over time)
 - Bulk domain list upload (CSV)
 - Optional: BSSN/CSIRT notification webhook
@@ -187,24 +223,32 @@ pantauin/
 │   ├── Dockerfile
 │   └── app/
 │       ├── main.py
+│       ├── worker.py              ← Celery app instance
 │       ├── core/
-│       │   ├── config.py
-│       │   └── deps.py
+│       │   ├── config.py          ← Settings (database_url, redis, CSE keys)
+│       │   └── deps.py            ← DB engine, session factory, init_db
 │       ├── api/routes/
-│       │   ├── scan.py        ← POST /scan, GET /scan/{id}
-│       │   └── report.py      ← GET /scan/{id}/report
+│       │   ├── scan.py            ← POST /scan, GET /scan/{id}, GET /scans
+│       │   ├── report.py          ← GET /scan/{id}/report (HTML + PDF)
+│       │   └── keywords.py        ← keyword management endpoints
 │       ├── scanner/
-│       │   ├── dork_sweep.py  ← Google CSE gambling dorks
-│       │   ├── page_crawl.py  ← Playwright injection detector + screenshot
-│       │   ├── header_probe.py← httpx security header analysis
-│       │   ├── path_probe.py  ← httpx exposed path detection
-│       │   ├── cms_detect.py  ← CMS fingerprinting
-│       │   └── keywords.py    ← Bahasa Indonesia gambling term lists
+│       │   ├── pipeline.py        ← module registry + generic pipeline runner
+│       │   ├── scoring.py         ← CVSS-lite scoring function
+│       │   ├── dork_sweep.py      ← Google CSE gambling dorks
+│       │   ├── page_crawl.py      ← Playwright injection detector + screenshot
+│       │   ├── header_probe.py    ← httpx security header analysis
+│       │   ├── path_probe.py      ← httpx exposed path detection
+│       │   ├── cms_detect.py      ← CMS fingerprinting
+│       │   ├── keyword_discovery.py ← auto-discovery of new gambling terms
+│       │   └── keywords.py        ← Bahasa Indonesia gambling term lists
+│       ├── tasks/
+│       │   ├── scan_tasks.py      ← Celery task: single domain pipeline
+│       │   └── tld_sweep_tasks.py ← Celery task: TLD sweep + child dispatch
 │       ├── models/
-│       │   └── scan.py        ← SQLAlchemy ORM: ScanJob, Finding, Evidence
+│       │   └── scan.py            ← ScanJob, Finding, ModuleStatus, DiscoveredKeyword
 │       └── schemas/
-│           ├── scan.py        ← Pydantic request/response schemas
-│           └── finding.py     ← Finding schema with severity
+│           ├── scan.py            ← ScanRequest, ScanStatusResponse, ScanHistoryResponse, etc.
+│           └── finding.py         ← FindingSchema with cvss_score
 └── frontend/
     ├── package.json
     ├── vite.config.js
@@ -214,45 +258,56 @@ pantauin/
         ├── App.jsx
         ├── lib/api.js
         ├── hooks/
-        │   ├── useScan.js     ← submit scan, get scan_id
-        │   └── useScanJob.js  ← poll scan status
+        │   ├── useScan.js         ← submit scan, navigate to report
+        │   └── useScanJob.js      ← poll scan status every 2s
         ├── pages/
-        │   ├── Home.jsx       ← DomainInput + scan type selector
-        │   └── ScanReport.jsx ← findings + evidence viewer
+        │   ├── Home.jsx           ← centered scan input, example domain chips
+        │   ├── ScanReport.jsx     ← findings, severity cards, TLD child table
+        │   ├── History.jsx        ← scan history (exists, Phase 3 wiring)
+        │   └── Keywords.jsx       ← keyword management UI
         └── components/
-            ├── input/DomainInput.jsx
+            ├── input/DomainInput.jsx    ← TLD sweep badge auto-detection
             ├── results/
             │   ├── ScanProgress.jsx
-            │   ├── FindingCard.jsx   ← per-finding with severity badge
-            │   ├── EvidenceViewer.jsx← screenshot + metadata
-            │   └── VulnSurface.jsx   ← header/path/cms results
+            │   ├── FindingCard.jsx      ← severity badge + CVSS-lite score + left border accent
+            │   ├── EvidenceViewer.jsx   ← screenshot + SHA256 hash
+            │   └── VulnSurface.jsx
             └── shared/
-                ├── SeverityBadge.jsx ← critical/high/medium/low/info
+                ├── SeverityBadge.jsx
                 └── NavBar.jsx
 ```
 
 ---
 
-## Key Design Decisions (already made — do not revisit)
+## Key Design Decisions (do not revisit)
 
 - **Passive only for vuln surface:** No active exploitation, no payload injection.
-  Path probing is GET-only, checking HTTP status codes. Pantauin is a detection
-  and reporting tool, not a penetration testing framework.
+  Path probing is GET-only, checking HTTP status codes.
 - **Playwright for evidence:** Screenshots are the primary deliverable — they
   must be timestamped, full-page, and SHA256-hashed for integrity.
 - **Bahasa Indonesia keyword list is authoritative:** A separate `keywords.py`
   module maintains the gambling term list so it can be updated independently
-  of scan logic.
+  of scan logic. `keyword_discovery.py` auto-expands it from found pages.
 - **Scraper contract:** Every scanner module MUST return this shape even on failure:
   `{"module": "dork_sweep", "status": "error"|"success", "findings": []|null, "error": "..."|null}`
+- **Module registry:** Adding a new scanner = create the file following the contract
+  - add one `PipelineModule` entry to `PIPELINE` in `scanner/pipeline.py`.
+  Do NOT add hardcoded blocks to the pipeline runner.
 - **Evidence stored server-side:** Screenshots are saved to
   `backend/evidence/{scan_id}/` and served via a static file endpoint.
   They are never uploaded to third-party services.
+- **TLD sweep auto-detection:** Input starting with `.` is a TLD sweep.
+  Validated in both `ScanRequest.clean_domain` (backend) and `DomainInput.jsx` (frontend).
+- **Celery task pattern:** Tasks are sync functions that call `asyncio.run()` on
+  the async implementation. Do not use Celery's experimental asyncio support.
+- **Database:** SQLite (`sqlite+aiosqlite`) for local dev without Docker.
+  PostgreSQL (`postgresql+asyncpg`) for prod. docker-compose injects
+  `DATABASE_URL` as an environment override — do not hardcode it.
 - **Pydantic v2:** Use `model_validator`, `field_validator` (not v1 syntax).
-- **Dark UI:** Consistent with IntelID aesthetic.
-- **React Flow for Phase 2 graph:** If domain-to-finding relationships need
-  visualization later (e.g. gambling network mapping), use @xyflow/react —
-  same pattern as IntelID Phase 2.
+- **Dark UI:** bg `#0a0c0f`, surface `#111318`, border `#2a2d35`, accent `#e8c547`.
+  Font: DM Sans (body), Syne (brand/headings), JetBrains Mono (URLs/hashes/code).
+- **CVSS-lite scores:** Computed in `_save_findings` via `scoring.compute_cvss_lite()`.
+  Stored on `Finding.cvss_score`. Displayed on FindingCard and in both report formats.
 
 ---
 
@@ -271,22 +326,23 @@ Common injected anchor patterns:
 
 ## Severity Scoring
 
-| Severity | Criteria |
-|---|---|
-| Critical | Gambling content confirmed on page (keywords + screenshot) |
-| High | Hidden gambling links injected (`<a>` with gambling keywords, `display:none`) |
-| High | Exposed `.env`, `.git/config`, `config.php` (200 response) |
-| Medium | Admin panel exposed (200 response on `/wp-admin`, `/administrator`) |
-| Medium | Server version disclosure (Apache/PHP version in headers) |
-| Low | Missing security headers (CSP, HSTS, X-Frame-Options) |
-| Info | CMS fingerprint only (no vulnerability, just detection) |
+| Severity | Criteria | CVSS-lite base |
+| --- | --- | --- |
+| Critical | Gambling content confirmed on page (keywords + screenshot) | 9.0–9.8 |
+| High | Hidden gambling links injected / Exposed `.env`, `.git/config` | 6.5–8.5 |
+| Medium | Admin panel exposed / Server version disclosure | 4.5–5.5 |
+| Low | Missing security headers (CSP, HSTS, X-Frame-Options) | 3.0 |
+| Info | CMS fingerprint only (no vulnerability, just detection) | 1.0 |
+
+Evidence modifiers applied on top: +0.3 screenshot confirmed, +0.2 ≥5 keywords,
++0.3 ≥3 injected links. All capped at 10.0.
 
 ---
 
 ## Conventions
 
 - Python: type hints everywhere, async FastAPI routes, Pydantic v2 models
-- React: functional components only, custom hooks for data fetching, Tailwind only
+- React: functional components only, custom hooks for data fetching, Tailwind only (no shadcn, no Framer Motion)
 - Evidence files: named `{scan_id}_{module}_{url_slug}_{timestamp}.png`
 - Commits: conventional commits (feat:, fix:, chore:)
 - Comments: English only
