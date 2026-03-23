@@ -1,7 +1,7 @@
 """
 Module: keyword_discovery
 Extracts candidate gambling keywords from confirmed injected pages.
-Runs after page_crawl confirms a finding — mines the injected content
+Runs after page_crawl confirms a finding - mines the injected content
 for new terminology not yet in the keyword list.
 
 The feedback loop:
@@ -24,7 +24,7 @@ from app.scanner.keywords import GAMBLING_KEYWORDS, INJECTED_ANCHOR_PATTERNS
 
 logger = logging.getLogger(__name__)
 
-# Auto-approve threshold — seen on this many distinct sites = trusted
+# Auto-approve threshold - seen on this many distinct sites = trusted
 AUTO_APPROVE_THRESHOLD = 3
 
 # Minimum character length for a candidate keyword
@@ -50,7 +50,7 @@ INDONESIAN_STOPWORDS = {
     "read", "baca", "lihat", "view", "next", "prev", "back",
 }
 
-# Patterns that strongly signal gambling context — used to validate candidates
+# Patterns that strongly signal gambling context - used to validate candidates
 GAMBLING_CONTEXT_SIGNALS = [
     r'\b(slot|judi|togel|casino|poker|taruhan|bet|win|menang|bonus|deposit)\b',
     r'\b(gacor|maxwin|jackpot|scatter|wild|spin|rtp)\b',
@@ -204,7 +204,7 @@ async def process_finding(
 
 async def get_active_keywords(db: AsyncSession) -> list[str]:
     """
-    Return all active keywords — seed list + approved discoveries.
+    Return all active keywords - seed list + approved discoveries.
     This is what page_crawl uses at scan time.
     """
     result = await db.execute(
@@ -222,7 +222,7 @@ async def get_active_keywords(db: AsyncSession) -> list[str]:
 async def seed_keywords(db: AsyncSession) -> None:
     """
     Seed the discovered_keywords table with the static keyword list on first run.
-    Idempotent — skips existing entries.
+    Idempotent - skips existing entries.
     """
     for kw in GAMBLING_KEYWORDS:
         result = await db.execute(

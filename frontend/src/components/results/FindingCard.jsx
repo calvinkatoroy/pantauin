@@ -1,5 +1,7 @@
+import { useState } from "react";
 import SeverityBadge from "../shared/SeverityBadge.jsx";
 import EvidenceViewer from "./EvidenceViewer.jsx";
+import { patchFindingLifecycle } from "../../lib/api.js";
 
 const MODULE_LABELS = {
   dork_sweep:   "Dork Sweep",
@@ -7,6 +9,7 @@ const MODULE_LABELS = {
   header_probe: "Header Probe",
   path_probe:   "Path Probe",
   cms_detect:   "CMS Detect",
+  shodan_probe: "Shodan",
 };
 
 const SEVERITY_BORDER = {
@@ -17,8 +20,35 @@ const SEVERITY_BORDER = {
   info:     "#374151",
 };
 
+const DELTA_BADGE = {
+  new:       { label: "NEW",       bg: "#14532d", color: "#86efac" },
+  recurring: { label: "RECURRING", bg: "#1c1917", color: "#78716c" },
+};
+
+const LIFECYCLE_OPTIONS = [
+  { value: "open",            label: "Open" },
+  { value: "in-remediation",  label: "In Remediation" },
+  { value: "resolved",        label: "Resolved" },
+  { value: "accepted-risk",   label: "Accepted Risk" },
+];
+
 export default function FindingCard({ finding }) {
   const borderColor = SEVERITY_BORDER[finding.severity] || SEVERITY_BORDER.info;
+  const [lifecycle, setLifecycle] = useState(finding.lifecycle_status || "open");
+  const [saving, setSaving] = useState(false);
+
+  async function handleLifecycleChange(e) {
+    const newStatus = e.target.value;
+    setLifecycle(newStatus);
+    setSaving(true);
+    try {
+      await patchFindingLifecycle(finding.id, newStatus);
+    } catch (_) {
+      setLifecycle(lifecycle); // revert on error
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div
@@ -46,6 +76,38 @@ export default function FindingCard({ finding }) {
             {finding.cvss_score.toFixed(1)}
           </span>
         )}
+        {finding.delta_tag && DELTA_BADGE[finding.delta_tag] && (
+          <span
+            className="text-xs px-2 py-0.5 rounded uppercase tracking-wider font-bold"
+            style={{
+              background: DELTA_BADGE[finding.delta_tag].bg,
+              color: DELTA_BADGE[finding.delta_tag].color,
+            }}
+          >
+            {DELTA_BADGE[finding.delta_tag].label}
+          </span>
+        )}
+        <select
+          value={lifecycle}
+          onChange={handleLifecycleChange}
+          disabled={saving}
+          className="ml-auto text-xs rounded px-2 py-0.5 outline-none"
+          style={{
+            background: "#1f2937",
+            color: lifecycle === "resolved" ? "#86efac"
+                 : lifecycle === "in-remediation" ? "#fbbf24"
+                 : lifecycle === "accepted-risk" ? "#78716c"
+                 : "#9ca3af",
+            border: "1px solid #374151",
+            opacity: saving ? 0.5 : 1,
+          }}
+        >
+          {LIFECYCLE_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Title */}

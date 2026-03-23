@@ -1,7 +1,7 @@
 """
 Module: path_probe
 Non-intrusive GET-only checks for exposed admin panels, config files,
-and sensitive paths. Only checks HTTP status codes — no exploitation.
+and sensitive paths. Only checks HTTP status codes - no exploitation.
 
 Contract return shape:
 {
@@ -19,14 +19,14 @@ logger = logging.getLogger(__name__)
 
 # (path, severity, label)
 PROBE_PATHS: list[tuple[str, str, str]] = [
-    # Critical — sensitive files exposed
+    # Critical - sensitive files exposed
     ("/.env", "high", "Exposed .env file"),
     ("/.git/config", "high", "Exposed .git/config"),
     ("/config.php", "high", "Exposed config.php"),
     ("/wp-config.php", "high", "Exposed wp-config.php"),
     ("/configuration.php", "high", "Exposed configuration.php (Joomla)"),
     ("/settings.php", "high", "Exposed settings.php (Drupal)"),
-    # Medium — admin panels
+    # Medium - admin panels
     ("/wp-admin/", "medium", "WordPress admin panel exposed"),
     ("/wp-login.php", "medium", "WordPress login page exposed"),
     ("/administrator/", "medium", "Joomla admin panel exposed"),
@@ -35,12 +35,12 @@ PROBE_PATHS: list[tuple[str, str, str]] = [
     ("/admin/", "medium", "Admin panel exposed"),
     ("/login/", "medium", "Login panel exposed"),
     ("/dashboard/", "medium", "Dashboard exposed"),
-    # Medium — backup/data dirs
+    # Medium - backup/data dirs
     ("/backup/", "medium", "Backup directory exposed"),
     ("/db/", "medium", "Database directory exposed"),
     ("/sql/", "medium", "SQL directory exposed"),
     ("/dump/", "medium", "Dump directory exposed"),
-    # Low — info disclosure
+    # Low - info disclosure
     ("/phpinfo.php", "medium", "phpinfo() page exposed"),
     ("/server-status", "low", "Apache server-status exposed"),
     ("/server-info", "low", "Apache server-info exposed"),
@@ -59,7 +59,7 @@ async def _probe(client: httpx.AsyncClient, base_url: str, path: str, severity: 
                 "module": "path_probe",
                 "severity": severity if resp.status_code == 200 else "low",
                 "url": url,
-                "title": f"{label} — {status_note}",
+                "title": f"{label} - {status_note}",
                 "description": (
                     f"Path {path} returned HTTP {resp.status_code}. "
                     f"{'This file may contain sensitive credentials or configuration.' if resp.status_code == 200 else 'The resource exists but access is currently restricted.'}"
@@ -81,9 +81,9 @@ async def run(domain: str) -> dict:
     try:
         async with httpx.AsyncClient(
             timeout=10.0,
-            follow_redirects=False,  # Don't follow — a 301 means path doesn't exist there
+            follow_redirects=False,  # Don't follow - a 301 means path doesn't exist there
             verify=False,
-            headers={"User-Agent": "Pantauin/1.0"},
+            headers={"User-Agent": "PantauInd/1.0"},
         ) as client:
             # Quick connectivity check
             try:

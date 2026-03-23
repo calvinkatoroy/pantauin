@@ -1,6 +1,6 @@
 """
 Module: page_crawl
-Active Playwright crawl — loads page, runs keyword matching, takes screenshot,
+Active Playwright crawl - loads page, runs keyword matching, takes screenshot,
 detects injected <a> tags and JS/meta redirects.
 
 Contract return shape:
@@ -25,7 +25,7 @@ from playwright.async_api import async_playwright, TimeoutError as PlaywrightTim
 from app.core.config import settings
 from app.scanner.keywords import GAMBLING_KEYWORDS, INJECTED_ANCHOR_PATTERNS, GAMBLING_DOMAIN_PATTERNS
 
-# Active keyword list — replaced at scan time with DB-loaded keywords
+# Active keyword list - replaced at scan time with DB-loaded keywords
 _ACTIVE_KEYWORDS: list[str] = GAMBLING_KEYWORDS
 
 logger = logging.getLogger(__name__)
@@ -108,7 +108,7 @@ async def crawl_url(url: str, scan_id: str) -> dict | None:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             context = await browser.new_context(
-                user_agent="Mozilla/5.0 (compatible; Pantauin/1.0; +https://pantauin.id)",
+                user_agent="Mozilla/5.0 (compatible; PantauInd/1.0; +https://pantauind.id)",
                 viewport={"width": 1280, "height": 900},
             )
             page = await context.new_page()

@@ -1,7 +1,7 @@
 """
 Module: cms_detect
 Fingerprint the CMS running on a domain (WordPress, Joomla, Drupal).
-Info-level finding — detection only, no vulnerability.
+Info-level finding - detection only, no vulnerability.
 
 Contract return shape:
 {
@@ -50,7 +50,7 @@ async def run(domain: str) -> dict:
                 timeout=15.0,
                 follow_redirects=True,
                 verify=False,
-                headers={"User-Agent": "Pantauin/1.0"},
+                headers={"User-Agent": "PantauInd/1.0"},
             ) as client:
                 resp = await client.get(url)
 

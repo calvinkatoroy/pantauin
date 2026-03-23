@@ -1,12 +1,12 @@
 """
-CVSS-lite scoring for Pantauin findings.
+CVSS-lite scoring for PantauInd findings.
 
 Produces a numeric score 0.0–10.0 per finding based on:
   - Severity label (base score)
   - Module type (contextual adjustment)
   - Evidence factors (screenshot confirmed, keyword density, injected links)
 
-Not a full CVSS implementation — a simplified analog appropriate for
+Not a full CVSS implementation - a simplified analog appropriate for
 gambling injection + passive vuln surface findings.
 """
 
@@ -25,7 +25,7 @@ _MODULE_OVERRIDES: dict[tuple[str, str], float] = {
     ("page_crawl", "critical"): 9.5,
     # Hidden injected links
     ("page_crawl", "high"): 8.0,
-    # Dork hit — not yet confirmed by crawl
+    # Dork hit - not yet confirmed by crawl
     ("dork_sweep", "high"): 6.5,
     # Exposed sensitive files (.env, .git, config.php)
     ("path_probe", "high"): 8.5,
@@ -48,7 +48,7 @@ def compute_cvss_lite(
     """
     score = _MODULE_OVERRIDES.get((module, severity), _BASE.get(severity, 1.0))
 
-    # Evidence modifiers — each capped to avoid runaway inflation
+    # Evidence modifiers - each capped to avoid runaway inflation
     if has_screenshot:
         score = min(score + 0.3, 10.0)
 

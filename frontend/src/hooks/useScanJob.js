@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { getScan } from "../lib/api.js";
 
 const POLL_INTERVAL = 2000;
-const TERMINAL_STATUSES = ["completed", "error"];
+const TERMINAL_STATUSES = ["completed", "error", "cancelled"];
 
 export function useScanJob(scanId) {
   const [data, setData] = useState(null);

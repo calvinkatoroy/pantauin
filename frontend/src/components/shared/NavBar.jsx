@@ -4,9 +4,10 @@ export default function NavBar() {
   const { pathname } = useLocation();
 
   const navLinks = [
-    { to: "/",         label: "Scanner" },
-    { to: "/history",  label: "History" },
-    { to: "/keywords", label: "Keywords" },
+    { to: "/",          label: "Scanner" },
+    { to: "/history",   label: "History" },
+    { to: "/schedules", label: "Schedules" },
+    { to: "/keywords",  label: "Keywords" },
   ];
 
   return (
@@ -26,7 +27,7 @@ export default function NavBar() {
             className="text-base font-bold tracking-wide"
             style={{ fontFamily: "Syne, sans-serif", color: "#e8c547" }}
           >
-            Pantauin
+            PantauInd
           </span>
         </Link>
 

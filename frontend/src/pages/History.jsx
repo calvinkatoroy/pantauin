@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import TrendChart from "../components/results/TrendChart.jsx";
+import { getTrend, getApiKey } from "../lib/api.js";
 import axios from "axios";
 
 const STATUS_FILTERS = ["all", "completed", "running", "pending", "error"];
@@ -24,18 +26,27 @@ async function fetchHistory({ page, limit, status, domain }) {
   const params = { page, limit };
   if (status && status !== "all") params.status = status;
   if (domain) params.domain = domain;
-  const { data } = await axios.get("/api/scans", { params });
+  const key = getApiKey();
+  const { data } = await axios.get("/api/scans", {
+    params,
+    headers: key ? { "X-API-Key": key } : {},
+  });
   return data;
 }
 
 export default function History() {
+  const [searchParams] = useSearchParams();
+  const initialDomain = searchParams.get("domain") || "";
+
   const [data, setData]       = useState(null);
   const [page, setPage]       = useState(1);
   const [status, setStatus]   = useState("all");
-  const [domain, setDomain]   = useState("");
-  const [search, setSearch]   = useState(""); // debounced into domain
+  const [domain, setDomain]   = useState(initialDomain);
+  const [search, setSearch]   = useState(initialDomain); // debounced into domain
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
+  const [trendData, setTrendData] = useState(null);
+  const [trendLoading, setTrendLoading] = useState(false);
 
   const LIMIT = 20;
 
@@ -63,6 +74,18 @@ export default function History() {
     return () => clearTimeout(t);
   }, [search]);
 
+  useEffect(() => {
+    if (!domain) {
+      setTrendData(null);
+      return;
+    }
+    setTrendLoading(true);
+    getTrend(domain)
+      .then(setTrendData)
+      .catch(() => setTrendData(null))
+      .finally(() => setTrendLoading(false));
+  }, [domain]);
+
   function handleStatusFilter(s) {
     setStatus(s);
     setPage(1);
@@ -82,7 +105,7 @@ export default function History() {
             Scan History
           </h1>
           <p className="text-sm" style={{ color: "#6b7280" }}>
-            All past scans — single domain and TLD sweep.
+            All past scans - single domain and TLD sweep.
             {data && (
               <span style={{ color: "#4b5563" }}> {data.total} total.</span>
             )}
@@ -121,6 +144,11 @@ export default function History() {
           </button>
         ))}
       </div>
+
+      {/* Trend chart - shown when domain search is active and has multiple scans */}
+      {domain && !trendLoading && trendData && trendData.points.length > 1 && (
+        <TrendChart domain={domain} points={trendData.points} />
+      )}
 
       {/* Table */}
       {error ? (
@@ -196,15 +224,15 @@ export default function History() {
                     </td>
                     <td className="px-4 py-3 text-center tabular-nums text-xs font-bold"
                         style={{ color: fc.critical > 0 ? "#ef4444" : "#374151" }}>
-                      {fc.critical || "—"}
+                      {fc.critical || "-"}
                     </td>
                     <td className="px-4 py-3 text-center tabular-nums text-xs font-bold"
                         style={{ color: fc.high > 0 ? "#f97316" : "#374151" }}>
-                      {fc.high || "—"}
+                      {fc.high || "-"}
                     </td>
                     <td className="px-4 py-3 text-center tabular-nums text-xs"
                         style={{ color: fc.total > 0 ? "#e2e8f0" : "#374151" }}>
-                      {fc.total || "—"}
+                      {fc.total || "-"}
                     </td>
                     <td className="px-4 py-3 text-xs" style={{ color: "#4b5563" }}>
                       {formatDate(scan.created_at)}

@@ -1,4 +1,4 @@
-# Pantauin
+# PantauInd
 
 > **Indonesian Government & Academic Website Security Scanner**
 > Detects judi online (online gambling) content injection and passive vulnerability surfaces on `.go.id` and `.ac.id` domains.
@@ -20,7 +20,7 @@ These compromises go undetected for months because:
 - The injected content is often **cloaked** — hidden from regular visitors but visible to Google
 - The same sites expose passive vulnerability surfaces (outdated CMS, exposed admin panels) that enabled the compromise in the first place
 
-**Pantauin solves this.** It scans a target domain, detects gambling injection with Playwright-captured evidence, and surfaces the vulnerability exposures that likely enabled the attack — all in one report.
+**PantauInd solves this.** It scans a target domain, detects gambling injection with Playwright-captured evidence, and surfaces the vulnerability exposures that likely enabled the attack — all in one report.
 
 ---
 
@@ -106,8 +106,8 @@ Scan Pipeline (sequential async):
 
 ```bash
 # Clone
-git clone https://github.com/YOUR_USERNAME/pantauin.git
-cd pantauin
+git clone https://github.com/YOUR_USERNAME/pantauind.git
+cd pantauind
 
 # Environment
 cp .env.example .env
@@ -166,7 +166,7 @@ docker compose up --build
 
 ## Disclaimer
 
-Pantauin performs **passive, non-intrusive scans only**. All HTTP probing is GET-only with no payload injection. It is a detection and evidence tool, not a penetration testing framework. Use only on domains you are authorized to scan.
+PantauInd performs **passive, non-intrusive scans only**. All HTTP probing is GET-only with no payload injection. It is a detection and evidence tool, not a penetration testing framework. Use only on domains you are authorized to scan.
 
 ---
 

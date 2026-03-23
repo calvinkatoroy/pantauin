@@ -65,6 +65,29 @@ class ScanHistoryResponse(BaseModel):
     scans: list[ScanSummary]
 
 
+class TrendPoint(BaseModel):
+    scan_id: str
+    created_at: datetime
+    status: str
+    finding_counts: FindingCounts
+    cvss_max: float | None = None
+
+
+class TrendResponse(BaseModel):
+    domain: str
+    points: list[TrendPoint]
+
+
+class BulkScanItem(BaseModel):
+    domain: str
+    scan_id: str
+
+
+class BulkScanResponse(BaseModel):
+    count: int
+    scans: list[BulkScanItem]
+
+
 class ScanStatusResponse(BaseModel):
     scan_id: str
     domain: str
@@ -76,5 +99,7 @@ class ScanStatusResponse(BaseModel):
     findings: list[FindingSchema]
     children: list[ChildScanSummary] = []
     error: str | None = None
+    previous_scan_id: str | None = None
+    delta_summary: dict | None = None  # {"new": N, "recurring": N, "resolved": N}
 
     model_config = {"from_attributes": True}

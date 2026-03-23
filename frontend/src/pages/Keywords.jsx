@@ -198,7 +198,7 @@ export default function Keywords() {
                         </button>
                       )}
                       {kw.is_seed && (
-                        <span className="text-xs" style={{ color: "#374151" }}>—</span>
+                        <span className="text-xs" style={{ color: "#374151" }}>-</span>
                       )}
                     </td>
                   </tr>

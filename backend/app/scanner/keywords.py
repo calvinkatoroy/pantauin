@@ -1,4 +1,4 @@
-# Bahasa Indonesia gambling keyword lists — authoritative source for all scan modules
+# Bahasa Indonesia gambling keyword lists - authoritative source for all scan modules
 
 GAMBLING_KEYWORDS: list[str] = [
     # Core terms

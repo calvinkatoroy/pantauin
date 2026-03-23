@@ -23,7 +23,7 @@ GOOGLE_CSE_URL = "https://www.googleapis.com/customsearch/v1"
 
 async def run(domain: str) -> dict:
     if not settings.google_cse_api_key or not settings.google_cse_id:
-        logger.warning("Google CSE credentials not configured — dork_sweep skipped")
+        logger.warning("Google CSE credentials not configured - dork_sweep skipped")
         return {
             "module": "dork_sweep",
             "status": "success",

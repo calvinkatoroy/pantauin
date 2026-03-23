@@ -7,9 +7,12 @@ from typing import Callable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+
+from app.core.config import settings
 from app.core.deps import AsyncSessionLocal
+from app.core.webhook import notify_webhook
 from app.models.scan import ScanJob, Finding, ModuleStatus
-from app.scanner import dork_sweep, page_crawl, header_probe, path_probe, cms_detect
+from app.scanner import dork_sweep, page_crawl, header_probe, path_probe, cms_detect, shodan_probe
 from app.scanner import keyword_discovery
 from app.scanner.scoring import compute_cvss_lite
 
@@ -33,7 +36,7 @@ async def _adapter_dork_sweep(
             "module": "dork_sweep",
             "severity": "high",
             "url": f["url"],
-            "title": f"Google dork hit: {f.get('dork', '')} — {f.get('title', '')}",
+            "title": f"Google dork hit: {f.get('dork', '')} - {f.get('title', '')}",
             "description": f.get("snippet", ""),
             "evidence_text": f.get("snippet", ""),
             "screenshot_path": None,
@@ -88,12 +91,20 @@ async def _adapter_cms_detect(
     return result, result.get("findings") or []
 
 
+async def _adapter_shodan_probe(
+    domain: str, scan_id: str, ctx: dict
+) -> tuple[dict, list[dict]]:
+    result = await shodan_probe.run(domain)
+    return result, result.get("findings") or []
+
+
 PIPELINE: list[PipelineModule] = [
     PipelineModule(name="dork_sweep", adapter=_adapter_dork_sweep),
     PipelineModule(name="page_crawl", adapter=_adapter_page_crawl),
     PipelineModule(name="header_probe", adapter=_adapter_header_probe),
     PipelineModule(name="path_probe", adapter=_adapter_path_probe),
     PipelineModule(name="cms_detect", adapter=_adapter_cms_detect),
+    PipelineModule(name="shodan_probe", adapter=_adapter_shodan_probe),
 ]
 
 
@@ -148,6 +159,70 @@ async def _save_findings(
     await db.commit()
 
 
+def _fingerprint(module: str, url: str, title: str) -> tuple:
+    # dork_sweep titles contain variable Google snippets — use (module, url) only
+    if module == "dork_sweep":
+        return (module, url)
+    return (module, url, title)
+
+
+async def _compute_diff(db: AsyncSession, scan_id: str, domain: str) -> None:
+    # Find the most recent completed scan for this domain (root scans only)
+    prev_result = await db.execute(
+        select(ScanJob)
+        .where(
+            ScanJob.domain == domain,
+            ScanJob.status == "completed",
+            ScanJob.id != scan_id,
+            ScanJob.parent_id.is_(None),
+        )
+        .order_by(ScanJob.created_at.desc())
+        .limit(1)
+    )
+    prev_job = prev_result.scalar_one_or_none()
+    if not prev_job:
+        return
+
+    # Build fingerprint set from previous scan
+    prev_findings_result = await db.execute(
+        select(Finding).where(Finding.scan_job_id == prev_job.id)
+    )
+    prev_findings = prev_findings_result.scalars().all()
+    prev_fps = {_fingerprint(f.module, f.url, f.title) for f in prev_findings}
+
+    # Tag current findings as new or recurring
+    curr_findings_result = await db.execute(
+        select(Finding).where(Finding.scan_job_id == scan_id)
+    )
+    curr_findings = curr_findings_result.scalars().all()
+    curr_fps: set[tuple] = set()
+
+    new_count = 0
+    recurring_count = 0
+    for f in curr_findings:
+        fp = _fingerprint(f.module, f.url, f.title)
+        curr_fps.add(fp)
+        if fp in prev_fps:
+            f.delta_tag = "recurring"
+            recurring_count += 1
+        else:
+            f.delta_tag = "new"
+            new_count += 1
+
+    resolved_count = len(prev_fps - curr_fps)
+
+    # Store diff results on current job
+    curr_job_result = await db.execute(select(ScanJob).where(ScanJob.id == scan_id))
+    curr_job = curr_job_result.scalar_one()
+    curr_job.previous_scan_id = prev_job.id
+    curr_job.delta_summary = json.dumps({
+        "new": new_count,
+        "recurring": recurring_count,
+        "resolved": resolved_count,
+    })
+    await db.commit()
+
+
 async def run_pipeline(scan_id: str, domain: str) -> None:
     async with AsyncSessionLocal() as db:
         try:
@@ -180,6 +255,38 @@ async def run_pipeline(scan_id: str, domain: str) -> None:
                     await _update_module_status(
                         db, scan_id, module.name, "error", str(module_err)
                     )
+
+            # Compute scan diff against previous scan for same domain
+            await _compute_diff(db, scan_id, domain)
+
+            # Notify webhook if critical findings were found
+            critical_result = await db.execute(
+                select(Finding).where(
+                    Finding.scan_job_id == scan_id,
+                    Finding.severity == "critical",
+                )
+            )
+            critical_findings = critical_result.scalars().all()
+            if critical_findings and settings.webhook_url:
+                await notify_webhook(
+                    settings.webhook_url,
+                    {
+                        "event": "critical_finding",
+                        "domain": domain,
+                        "scan_id": scan_id,
+                        "critical_count": len(critical_findings),
+                        "findings": [
+                            {
+                                "title": f.title,
+                                "url": f.url,
+                                "severity": f.severity,
+                                "cvss_score": f.cvss_score,
+                                "module": f.module,
+                            }
+                            for f in critical_findings
+                        ],
+                    },
+                )
 
             # Mark job as completed
             result = await db.execute(select(ScanJob).where(ScanJob.id == scan_id))

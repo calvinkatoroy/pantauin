@@ -42,7 +42,7 @@ async def run(domain: str) -> dict:
                 follow_redirects=True,
                 verify=False,
             ) as client:
-                resp = await client.get(url, headers={"User-Agent": "Pantauin/1.0"})
+                resp = await client.get(url, headers={"User-Agent": "PantauInd/1.0"})
 
             headers = {k.lower(): v for k, v in resp.headers.items()}
             final_url = str(resp.url)
@@ -54,7 +54,7 @@ async def run(domain: str) -> dict:
                     "module": "header_probe",
                     "severity": "medium",
                     "url": url,
-                    "title": "HTTPS not enforced — site serves over plain HTTP",
+                    "title": "HTTPS not enforced - site serves over plain HTTP",
                     "description": "The site does not redirect HTTP to HTTPS, exposing traffic to interception.",
                     "evidence_text": None,
                     "screenshot_path": None,

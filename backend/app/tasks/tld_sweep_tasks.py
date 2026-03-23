@@ -11,11 +11,16 @@ from datetime import datetime
 from urllib.parse import urlparse
 
 from app.worker import celery_app
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-MODULES = ["dork_sweep", "page_crawl", "header_probe", "path_probe", "cms_detect"]
+_ALL_MODULES = ["dork_sweep", "page_crawl", "header_probe", "path_probe", "cms_detect", "shodan_probe"]
 MAX_CHILD_DOMAINS = 50
+
+
+def _active_modules() -> list[str]:
+    return [m for m in _ALL_MODULES if m != "shodan_probe" or settings.shodan_api_key]
 
 
 async def _run_tld_sweep_async(scan_id: str, tld: str) -> None:
@@ -57,7 +62,7 @@ async def _run_tld_sweep_async(scan_id: str, tld: str) -> None:
                     "module": "dork_sweep",
                     "severity": "high",
                     "url": f["url"],
-                    "title": f"Google dork hit: {f.get('dork', '')} — {f.get('title', '')}",
+                    "title": f"Google dork hit: {f.get('dork', '')} - {f.get('title', '')}",
                     "description": f.get("snippet", ""),
                     "evidence_text": f.get("snippet", ""),
                     "screenshot_path": None,
@@ -111,7 +116,7 @@ async def _run_tld_sweep_async(scan_id: str, tld: str) -> None:
                 db.add(child_job)
                 await db.flush()  # Get child_job.id
 
-                for module in MODULES:
+                for module in _active_modules():
                     db.add(ModuleStatus(scan_job_id=child_job.id, module=module, status="pending"))
 
                 await db.commit()

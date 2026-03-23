@@ -10,6 +10,13 @@ class Severity(str, Enum):
     info = "info"
 
 
+class LifecycleStatus(str, Enum):
+    open = "open"
+    in_remediation = "in-remediation"
+    resolved = "resolved"
+    accepted_risk = "accepted-risk"
+
+
 class FindingSchema(BaseModel):
     id: str
     scan_job_id: str
@@ -24,5 +31,7 @@ class FindingSchema(BaseModel):
     detected_keywords: list[str] | None = None
     injected_links: list[str] | None = None
     cvss_score: float | None = None
+    lifecycle_status: str = "open"
+    delta_tag: str | None = None  # new|recurring
 
     model_config = {"from_attributes": True}
