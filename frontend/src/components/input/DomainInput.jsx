@@ -10,15 +10,17 @@ export default function DomainInput({ onSubmit, loading, error }) {
     onSubmit(trimmed);
   }
 
+  const isSweep = domain.startsWith(".");
+
   return (
     <form onSubmit={handleSubmit} className="w-full max-w-2xl mx-auto">
-      <div className="flex gap-3">
+      <div className="flex gap-3 items-center">
         <div className="flex-1 relative">
           <input
             type="text"
             value={domain}
             onChange={(e) => setDomain(e.target.value)}
-            placeholder="bkn.go.id or kemenkeu.go.id"
+            placeholder="bkn.go.id or .go.id"
             disabled={loading}
             className="w-full px-4 py-3 rounded-lg text-sm font-mono outline-none transition-colors"
             style={{
@@ -33,10 +35,18 @@ export default function DomainInput({ onSubmit, loading, error }) {
             spellCheck="false"
           />
         </div>
+        {isSweep && (
+          <span
+            className="flex-shrink-0 text-xs px-2 py-0.5 rounded font-semibold"
+            style={{ background: "#1e3a5f", color: "#93c5fd" }}
+          >
+            TLD Sweep
+          </span>
+        )}
         <button
           type="submit"
           disabled={loading || !domain.trim()}
-          className="px-6 py-3 rounded-lg text-sm font-semibold transition-opacity"
+          className="flex-shrink-0 px-6 py-3 rounded-lg text-sm font-semibold transition-opacity"
           style={{
             background: "#e8c547",
             color: "#0a0c0f",
@@ -55,7 +65,7 @@ export default function DomainInput({ onSubmit, loading, error }) {
       )}
 
       <p className="mt-3 text-xs" style={{ color: "#4b5563" }}>
-        Enter a .go.id or .ac.id domain. Single domain scan only in Phase 1.
+        Enter a .go.id or .ac.id domain, or a TLD like .go.id to sweep the entire namespace.
       </p>
     </form>
   );

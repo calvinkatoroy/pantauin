@@ -1,7 +1,7 @@
 import DomainInput from "../components/input/DomainInput.jsx";
 import { useScan } from "../hooks/useScan.js";
 
-const EXAMPLE_DOMAINS = ["bkn.go.id", "kemenkeu.go.id", "ui.ac.id", "ugm.ac.id"];
+const EXAMPLE_DOMAINS = [".go.id", ".ac.id", "bkn.go.id", "kemenkeu.go.id"];
 
 export default function Home() {
   const { submitScan, loading, error } = useScan();

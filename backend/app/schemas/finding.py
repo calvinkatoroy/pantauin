@@ -23,5 +23,6 @@ class FindingSchema(BaseModel):
     screenshot_hash: str | None = None
     detected_keywords: list[str] | None = None
     injected_links: list[str] | None = None
+    cvss_score: float | None = None
 
     model_config = {"from_attributes": True}

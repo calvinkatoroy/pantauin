@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { useScanJob } from "../hooks/useScanJob.js";
 import ScanProgress from "../components/results/ScanProgress.jsx";
 import FindingCard from "../components/results/FindingCard.jsx";
@@ -62,15 +62,26 @@ export default function ScanReport() {
             {data.domain}
           </h1>
           {isComplete && (
-            <a
-              href={`/api/scan/${data.scan_id}/report`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-shrink-0 px-4 py-2 rounded text-sm font-semibold no-underline"
-              style={{ background: "#e8c547", color: "#0a0c0f" }}
-            >
-              Export Report
-            </a>
+            <div className="flex gap-2 flex-shrink-0">
+              <a
+                href={`/api/scan/${data.scan_id}/report`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 rounded text-sm font-semibold no-underline"
+                style={{ background: "#1f2937", color: "#e2e8f0", border: "1px solid #2a2d35" }}
+              >
+                HTML
+              </a>
+              <a
+                href={`/api/scan/${data.scan_id}/report/pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-4 py-2 rounded text-sm font-semibold no-underline"
+                style={{ background: "#e8c547", color: "#0a0c0f" }}
+              >
+                Export PDF
+              </a>
+            </div>
           )}
         </div>
 
@@ -153,6 +164,87 @@ export default function ScanReport() {
 
       {/* Vuln surface */}
       <VulnSurface findings={findings} />
+
+      {/* TLD sweep — child domains */}
+      {data.scan_type === "tld_sweep" && (
+        <div className="mb-6">
+          {data.children && data.children.length > 0 ? (
+            <div
+              className="rounded-lg overflow-hidden"
+              style={{ background: "#111318", border: "1px solid #2a2d35" }}
+            >
+              <div className="px-4 py-3 border-b" style={{ borderColor: "#2a2d35" }}>
+                <h2
+                  className="text-xs font-semibold uppercase tracking-widest"
+                  style={{ color: "#9ca3af" }}
+                >
+                  Child Domains — {data.children.length} domain{data.children.length !== 1 ? "s" : ""} queued
+                </h2>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ borderBottom: "1px solid #2a2d35" }}>
+                    <th className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "#4b5563" }}>Domain</th>
+                    <th className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "#4b5563" }}>Status</th>
+                    <th className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "#4b5563" }}>Findings</th>
+                    <th className="px-4 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.children.map((child) => {
+                    const statusColor =
+                      child.status === "completed"
+                        ? "#22c55e"
+                        : child.status === "running"
+                        ? "#eab308"
+                        : child.status === "error"
+                        ? "#ef4444"
+                        : "#6b7280";
+                    return (
+                      <tr
+                        key={child.scan_id}
+                        style={{ borderBottom: "1px solid #1a1d24" }}
+                      >
+                        <td className="px-4 py-3 font-mono text-xs" style={{ color: "#e2e8f0" }}>
+                          {child.domain}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className="text-xs font-semibold uppercase" style={{ color: statusColor }}>
+                            {child.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-xs tabular-nums" style={{ color: child.finding_count > 0 ? "#f97316" : "#4b5563" }}>
+                          {child.finding_count}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Link
+                            to={`/scan/${child.scan_id}`}
+                            className="text-xs font-semibold no-underline"
+                            style={{ color: "#e8c547" }}
+                          >
+                            View →
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            data.status !== "completed" && (
+              <div
+                className="rounded-lg px-4 py-6 text-center"
+                style={{ background: "#111318", border: "1px solid #2a2d35" }}
+              >
+                <p className="text-sm" style={{ color: "#6b7280" }}>
+                  Discovering domains… dork sweep in progress.
+                </p>
+              </div>
+            )
+          )}
+        </div>
+      )}
 
       {/* Empty state */}
       {isComplete && findings.length === 0 && (

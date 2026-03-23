@@ -38,6 +38,14 @@ export default function FindingCard({ finding }) {
         >
           {MODULE_LABELS[finding.module] || finding.module}
         </span>
+        {finding.cvss_score != null && (
+          <span
+            className="text-xs font-bold font-mono px-2 py-0.5 rounded"
+            style={{ background: "#1f2937", color: borderColor }}
+          >
+            {finding.cvss_score.toFixed(1)}
+          </span>
+        )}
       </div>
 
       {/* Title */}

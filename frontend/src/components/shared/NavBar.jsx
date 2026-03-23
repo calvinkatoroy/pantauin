@@ -5,6 +5,7 @@ export default function NavBar() {
 
   const navLinks = [
     { to: "/",         label: "Scanner" },
+    { to: "/history",  label: "History" },
     { to: "/keywords", label: "Keywords" },
   ];
 

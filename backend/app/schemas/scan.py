@@ -27,18 +27,54 @@ class ModuleStatusSchema(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ChildScanSummary(BaseModel):
+    scan_id: str
+    domain: str
+    status: str
+    finding_count: int
+
+    model_config = {"from_attributes": True}
+
+
 class ScanResponse(BaseModel):
     scan_id: str
+
+
+class FindingCounts(BaseModel):
+    total: int = 0
+    critical: int = 0
+    high: int = 0
+    medium: int = 0
+    low: int = 0
+
+
+class ScanSummary(BaseModel):
+    scan_id: str
+    domain: str
+    status: str
+    scan_type: str
+    created_at: datetime
+    updated_at: datetime
+    finding_counts: FindingCounts
+
+
+class ScanHistoryResponse(BaseModel):
+    total: int
+    page: int
+    limit: int
+    scans: list[ScanSummary]
 
 
 class ScanStatusResponse(BaseModel):
     scan_id: str
     domain: str
     status: str
+    scan_type: str = "single"
     created_at: datetime
     updated_at: datetime
     modules: list[ModuleStatusSchema]
     findings: list[FindingSchema]
+    children: list[ChildScanSummary] = []
     error: str | None = None
 
     model_config = {"from_attributes": True}

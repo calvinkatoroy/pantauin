@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     secret_key: str = Field(default="dev-secret-change-in-prod")
     frontend_url: str = Field(default="http://localhost:5173")
     evidence_dir: str = Field(default="./evidence")
+    redis_url: str = Field(default="redis://localhost:6379/0")
+    celery_broker_url: str = Field(default="redis://localhost:6379/0")
+    celery_result_backend: str = Field(default="redis://localhost:6379/0")
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

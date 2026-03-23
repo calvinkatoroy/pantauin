@@ -15,12 +15,16 @@ class ScanJob(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     domain: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|running|completed|error
+    scan_type: Mapped[str] = mapped_column(String(20), default="single")  # single|tld_sweep
+    parent_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("scan_jobs.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     findings: Mapped[list["Finding"]] = relationship("Finding", back_populates="scan_job", cascade="all, delete-orphan")
     module_statuses: Mapped[list["ModuleStatus"]] = relationship("ModuleStatus", back_populates="scan_job", cascade="all, delete-orphan")
+    children: Mapped[list["ScanJob"]] = relationship("ScanJob", foreign_keys=[parent_id], back_populates="parent")
+    parent: Mapped["ScanJob | None"] = relationship("ScanJob", foreign_keys=[parent_id], back_populates="children", remote_side="ScanJob.id")
 
 
 class Finding(Base):
@@ -38,6 +42,7 @@ class Finding(Base):
     screenshot_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     detected_keywords: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array as text
     injected_links: Mapped[str | None] = mapped_column(Text, nullable=True)    # JSON array as text
+    cvss_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     scan_job: Mapped["ScanJob"] = relationship("ScanJob", back_populates="findings")
