@@ -10,7 +10,7 @@ export default function VulnSurface({ findings }) {
     <div className="mt-6">
       <h2
         className="text-sm font-semibold mb-3 pb-2 border-b uppercase tracking-wider"
-        style={{ color: "#6b7280", borderColor: "#2a2d35" }}
+        style={{ color: "var(--text-muted)", borderColor: "var(--border)" }}
       >
         Passive Vulnerability Surface
       </h2>

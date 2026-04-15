@@ -1,6 +1,7 @@
 import axios from "axios";
 
 const STORAGE_KEY = "pantauind_api_key";
+const USER_KEY    = "pantauind_user";   // {username, role}
 
 export function getApiKey() {
   return localStorage.getItem(STORAGE_KEY) || "";
@@ -12,6 +13,59 @@ export function setApiKey(key) {
 
 export function clearApiKey() {
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(USER_KEY);
+}
+
+export function getUser() {
+  try {
+    return JSON.parse(localStorage.getItem(USER_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+export function setUser(user) {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+// Auth endpoints (no X-API-Key needed)
+export async function checkSetupRequired() {
+  const { data } = await client.get("/auth/setup-required");
+  return data.setup_required;
+}
+
+export async function setupAdmin(username, password) {
+  const { data } = await client.post("/auth/setup", { username, password });
+  return data; // {api_key, username, role}
+}
+
+export async function login(username, password) {
+  const { data } = await client.post("/auth/login", { username, password });
+  return data; // {api_key, username, role}
+}
+
+export async function getMe() {
+  const { data } = await client.get("/auth/me");
+  return data;
+}
+
+export async function getUsers() {
+  const { data } = await client.get("/auth/users");
+  return data;
+}
+
+export async function createUser(username, password, role) {
+  const { data } = await client.post("/auth/users", { username, password, role });
+  return data;
+}
+
+export async function updateUser(id, patch) {
+  const { data } = await client.patch(`/auth/users/${id}`, patch);
+  return data;
+}
+
+export async function deleteUser(id) {
+  await client.delete(`/auth/users/${id}`);
 }
 
 const client = axios.create({
@@ -116,4 +170,17 @@ export async function updateSchedule(id, patch) {
 
 export async function deleteSchedule(id) {
   await client.delete(`/schedules/${id}`);
+}
+
+export async function getAuditLog({ page = 1, limit = 50, action = null, actor = null } = {}) {
+  const params = { page, limit };
+  if (action) params.action = action;
+  if (actor) params.actor = actor;
+  const { data } = await client.get("/audit", { params });
+  return data;
+}
+
+export async function getDashboard() {
+  const { data } = await client.get("/dashboard");
+  return data;
 }

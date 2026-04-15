@@ -42,154 +42,178 @@ export default function Home() {
   }
 
   return (
-    <main className="flex flex-col" style={{ minHeight: "calc(100vh - 57px)" }}>
-      {/* Center section */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-20">
-        {/* Brand */}
-        <div className="text-center mb-10">
-          <h1
-            className="text-5xl font-extrabold mb-3"
+    <div style={{ maxWidth: "720px", margin: "0 auto", padding: "40px 24px" }}>
+      {/* Page header */}
+      <div style={{ marginBottom: "28px" }}>
+        <h1
+          style={{
+            fontSize: "18px",
+            fontWeight: 600,
+            color: "var(--text-primary)",
+            margin: "0 0 6px",
+          }}
+        >
+          Scan a domain
+        </h1>
+        <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: 0 }}>
+          Detects judi online injection and passive vulnerability surfaces on{" "}
+          <code style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "12px" }}>.go.id</code>
+          {" "}and{" "}
+          <code style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "12px" }}>.ac.id</code>
+          {" "}domains. Enter a single domain or a TLD sweep.
+        </p>
+      </div>
+
+      {/* Scan input */}
+      <DomainInput onSubmit={submitScan} loading={loading} error={error} />
+
+      {/* Quick examples */}
+      <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+        <span style={{ fontSize: "11px", color: "var(--text-muted)" }}>Examples:</span>
+        {EXAMPLE_DOMAINS.map((d) => (
+          <button
+            key={d}
+            onClick={() => !loading && submitScan(d)}
+            disabled={loading}
             style={{
-              fontFamily: "Syne, sans-serif",
-              color: "#e2e8f0",
-              letterSpacing: "-0.02em",
+              padding: "2px 8px",
+              fontSize: "11px",
+              fontFamily: "JetBrains Mono, monospace",
+              background: "none",
+              border: "1px solid var(--border)",
+              borderRadius: "4px",
+              color: "var(--text-secondary)",
+              cursor: loading ? "not-allowed" : "pointer",
+              transition: "color 0.1s, border-color 0.1s",
+            }}
+            onMouseEnter={(e) => {
+              if (!loading) {
+                e.currentTarget.style.color = "var(--accent)";
+                e.currentTarget.style.borderColor = "var(--accent)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = "var(--text-secondary)";
+              e.currentTarget.style.borderColor = "var(--border)";
             }}
           >
-            PantauInd
-          </h1>
-          <p className="text-sm" style={{ color: "#6b7280" }}>
-            Detects judi online injection and vulnerability surfaces on{" "}
-            <span className="font-mono" style={{ color: "#9ca3af" }}>
-              .go.id
-            </span>{" "}
-            and{" "}
-            <span className="font-mono" style={{ color: "#9ca3af" }}>
-              .ac.id
-            </span>{" "}
-            domains.
-          </p>
+            {d}
+          </button>
+        ))}
+      </div>
+
+      {/* Divider */}
+      <hr style={{ border: "none", borderTop: "1px solid var(--border)", margin: "28px 0" }} />
+
+      {/* Bulk scan */}
+      <div>
+        <h2
+          style={{
+            fontSize: "13px",
+            fontWeight: 600,
+            color: "var(--text-primary)",
+            margin: "0 0 4px",
+          }}
+        >
+          Bulk scan — CSV upload
+        </h2>
+        <p style={{ fontSize: "12px", color: "var(--text-muted)", margin: "0 0 12px" }}>
+          One domain per row. Header row optional. Max 500 domains per upload.
+        </p>
+
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={handleDrop}
+          onClick={() => fileRef.current?.click()}
+          style={{
+            border: `1px dashed ${dragOver ? "var(--accent)" : "var(--border)"}`,
+            borderRadius: "6px",
+            padding: "20px",
+            cursor: "pointer",
+            background: dragOver ? "var(--accent-dim)" : "transparent",
+            textAlign: "center",
+            transition: "border-color 0.15s, background 0.15s",
+          }}
+        >
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".csv"
+            style={{ display: "none" }}
+            onChange={handleFileChange}
+          />
+          {bulkFile ? (
+            <>
+              <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "13px", color: "var(--text-primary)" }}>
+                {bulkFile.name}
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>
+                Click to change file
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
+                Drop a <code style={{ fontFamily: "JetBrains Mono, monospace", fontSize: "12px" }}>.csv</code> file here or click to browse
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "4px" }}>
+                One domain per row — header row optional
+              </div>
+            </>
+          )}
         </div>
 
-        {/* Scan input */}
-        <div className="w-full max-w-xl">
-          <DomainInput onSubmit={submitScan} loading={loading} error={error} />
-        </div>
-
-        {/* Example domains */}
-        <div className="mt-5 flex flex-wrap justify-center gap-2">
-          {EXAMPLE_DOMAINS.map((domain) => (
-            <button
-              key={domain}
-              onClick={() => !loading && submitScan(domain)}
-              disabled={loading}
-              className="text-xs font-mono px-3 py-1.5 rounded transition-all"
-              style={{
-                background: "transparent",
-                border: "1px solid #2a2d35",
-                color: "#4b5563",
-                cursor: loading ? "not-allowed" : "pointer",
-              }}
-              onMouseEnter={(e) => {
-                if (!loading) {
-                  e.currentTarget.style.borderColor = "#e8c547";
-                  e.currentTarget.style.color = "#e8c547";
-                }
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.borderColor = "#2a2d35";
-                e.currentTarget.style.color = "#4b5563";
-              }}
-            >
-              {domain}
-            </button>
-          ))}
-        </div>
-
-        {/* Bulk CSV upload */}
-        <div className="w-full max-w-xl mt-10">
-          <div
-            className="rounded-lg p-1"
-            style={{ border: "1px solid #2a2d35", background: "#111318" }}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "10px" }}>
+          {bulkError ? (
+            <span style={{ fontSize: "12px", color: "var(--sev-critical-text)" }}>{bulkError}</span>
+          ) : (
+            <span />
+          )}
+          <button
+            onClick={handleBulkSubmit}
+            disabled={!bulkFile || bulkLoading}
+            style={{
+              padding: "6px 14px",
+              fontSize: "13px",
+              fontWeight: 500,
+              borderRadius: "6px",
+              border: "1px solid var(--border)",
+              background: bulkFile && !bulkLoading ? "var(--accent)" : "var(--bg-raised)",
+              color: bulkFile && !bulkLoading ? "var(--accent-text)" : "var(--text-muted)",
+              cursor: bulkFile && !bulkLoading ? "pointer" : "not-allowed",
+            }}
           >
-            <div className="px-4 pt-3 pb-2">
-              <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "#4b5563" }}>
-                Bulk Scan - CSV Upload
-              </p>
-
-              {/* Drop zone */}
-              <div
-                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={handleDrop}
-                onClick={() => fileRef.current?.click()}
-                className="rounded flex flex-col items-center justify-center py-6 cursor-pointer transition-colors"
-                style={{
-                  border: `1px dashed ${dragOver ? "#e8c547" : "#2a2d35"}`,
-                  background: dragOver ? "#1a1d24" : "transparent",
-                }}
-              >
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept=".csv"
-                  className="hidden"
-                  onChange={handleFileChange}
-                />
-                {bulkFile ? (
-                  <div className="text-center">
-                    <p className="text-sm font-mono" style={{ color: "#e2e8f0" }}>
-                      {bulkFile.name}
-                    </p>
-                    <p className="text-xs mt-1" style={{ color: "#4b5563" }}>
-                      Click to change file
-                    </p>
-                  </div>
-                ) : (
-                  <div className="text-center">
-                    <p className="text-sm" style={{ color: "#4b5563" }}>
-                      Drop a <span className="font-mono">.csv</span> file here or click to browse
-                    </p>
-                    <p className="text-xs mt-1" style={{ color: "#374151" }}>
-                      One domain per row - header row optional
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              {/* Submit */}
-              <div className="flex items-center justify-between mt-3">
-                {bulkError ? (
-                  <p className="text-xs" style={{ color: "#f87171" }}>{bulkError}</p>
-                ) : (
-                  <span />
-                )}
-                <button
-                  onClick={handleBulkSubmit}
-                  disabled={!bulkFile || bulkLoading}
-                  className="px-4 py-2 rounded text-sm font-semibold transition-opacity"
-                  style={{
-                    background: bulkFile && !bulkLoading ? "#e8c547" : "#1f2937",
-                    color: bulkFile && !bulkLoading ? "#0a0c0f" : "#4b5563",
-                    cursor: bulkFile && !bulkLoading ? "pointer" : "not-allowed",
-                  }}
-                >
-                  {bulkLoading ? "Queuing…" : "Scan All"}
-                </button>
-              </div>
-            </div>
-          </div>
+            {bulkLoading ? "Queuing…" : "Scan all"}
+          </button>
         </div>
       </div>
 
-      {/* Footer strip */}
+      {/* Capability reference */}
+      <hr style={{ border: "none", borderTop: "1px solid var(--border)", margin: "28px 0" }} />
       <div
-        className="flex justify-center gap-8 px-6 py-4 border-t text-xs"
-        style={{ borderColor: "#1a1d24", color: "#374151" }}
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "16px",
+          fontSize: "12px",
+          color: "var(--text-secondary)",
+        }}
       >
-        <span>Gambling Injection Detection</span>
-        <span>Passive Vulnerability Surface</span>
-        <span>SHA256 Evidence Snapshots</span>
+        {[
+          ["Gambling injection", "Google CSE dorks + Playwright page crawl"],
+          ["Vuln surface", "Headers, exposed paths, CMS fingerprint"],
+          ["Evidence", "Playwright screenshot + SHA-256 hash"],
+          ["Shodan", "Port/CVE enrichment when API key configured"],
+          ["Subdomain enum", "crt.sh CT logs + DNS probe"],
+          ["Diff/delta", "New vs. recurring vs. resolved between runs"],
+        ].map(([label, desc]) => (
+          <div key={label}>
+            <span style={{ color: "var(--text-primary)", fontWeight: 500 }}>{label}</span>
+            <span style={{ color: "var(--text-muted)" }}> — {desc}</span>
+          </div>
+        ))}
       </div>
-    </main>
+    </div>
   );
 }

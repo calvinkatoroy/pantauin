@@ -25,8 +25,11 @@ primary_region = "sin"
   destination = "/data/evidence"
   initial_size = "10gb"
 
+[deploy]
+  release_command = "alembic upgrade head"
+
 [processes]
-  web    = "uvicorn app.main:app --host 0.0.0.0 --port 8000"
+  web    = "sh entrypoint.sh"
   worker = "celery -A app.worker.celery_app worker --loglevel=info --concurrency=2"
   beat   = "celery -A app.worker.celery_app beat --loglevel=info"
 

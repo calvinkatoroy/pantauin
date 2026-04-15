@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select, func
@@ -94,7 +94,7 @@ async def approve_keyword(
         raise HTTPException(status_code=404, detail="Keyword not found")
 
     kw.status = "approved"
-    kw.approved_at = datetime.utcnow()
+    kw.approved_at = datetime.now(timezone.utc)
     await db.commit()
     await db.refresh(kw)
 

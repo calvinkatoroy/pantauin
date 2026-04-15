@@ -1,16 +1,18 @@
 const MODULE_LABELS = {
-  dork_sweep:  "Google Dork Sweep",
-  page_crawl:  "Page Crawl (Playwright)",
-  header_probe: "Header Analysis",
-  path_probe:  "Path Probe",
-  cms_detect:  "CMS Fingerprint",
+  dork_sweep:     "Google Dork Sweep",
+  page_crawl:     "Page Crawl (Playwright)",
+  header_probe:   "Header Analysis",
+  path_probe:     "Path Probe",
+  cms_detect:     "CMS Fingerprint",
+  shodan_probe:   "Shodan Probe",
+  subdomain_enum: "Subdomain Enumeration",
 };
 
 const STATUS_CONFIG = {
-  pending: { color: "#4b5563", dot: "bg-gray-600", label: "Pending" },
-  running: { color: "#e8c547", dot: "bg-yellow-400 animate-pulse", label: "Running" },
-  done:    { color: "#22c55e", dot: "bg-green-500", label: "Done" },
-  error:   { color: "#ef4444", dot: "bg-red-500", label: "Error" },
+  pending: { color: "var(--text-muted)",          dotClass: "bg-gray-600",                      label: "Pending" },
+  running: { color: "var(--sev-medium-text)",      dotClass: "bg-yellow-400 animate-pulse",      label: "Running" },
+  done:    { color: "var(--accent-info)",          dotClass: "bg-blue-400",                      label: "Done" },
+  error:   { color: "var(--sev-critical-text)",    dotClass: "bg-red-500",                       label: "Error" },
 };
 
 export default function ScanProgress({ modules, status }) {
@@ -19,10 +21,10 @@ export default function ScanProgress({ modules, status }) {
   return (
     <div
       className="rounded-lg p-4 mb-6"
-      style={{ background: "#111318", border: "1px solid #2a2d35" }}
+      style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
     >
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: "#4b5563" }}>
+        <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: "var(--text-muted)" }}>
           Scan Pipeline
         </span>
       </div>
@@ -32,15 +34,15 @@ export default function ScanProgress({ modules, status }) {
           const cfg = STATUS_CONFIG[mod.status] || STATUS_CONFIG.pending;
           return (
             <div key={mod.module} className="flex items-center gap-3">
-              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
+              <div className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dotClass}`} />
               <span className="text-sm flex-1" style={{ color: cfg.color }}>
                 {MODULE_LABELS[mod.module] || mod.module}
               </span>
-              <span className="text-xs" style={{ color: "#4b5563" }}>
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                 {cfg.label}
               </span>
               {mod.error && (
-                <span className="text-xs" style={{ color: "#f87171" }}>
+                <span className="text-xs" style={{ color: "var(--sev-critical-text)" }}>
                   {mod.error}
                 </span>
               )}

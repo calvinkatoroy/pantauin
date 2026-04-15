@@ -1,19 +1,41 @@
-const COLORS = {
-  critical: { bg: "#7f1d1d", text: "#fca5a5", label: "CRITICAL" },
-  high:     { bg: "#7c2d12", text: "#fdba74", label: "HIGH" },
-  medium:   { bg: "#713f12", text: "#fde047", label: "MEDIUM" },
-  low:      { bg: "#1e3a5f", text: "#93c5fd", label: "LOW" },
-  info:     { bg: "#1f2937", text: "#9ca3af", label: "INFO" },
+const SEV = {
+  critical: { label: "Critical", textVar: "--sev-critical-text", bgVar: "--sev-critical-bg" },
+  high:     { label: "High",     textVar: "--sev-high-text",     bgVar: "--sev-high-bg" },
+  medium:   { label: "Medium",   textVar: "--sev-medium-text",   bgVar: "--sev-medium-bg" },
+  low:      { label: "Low",      textVar: "--sev-low-text",      bgVar: "--sev-low-bg" },
+  info:     { label: "Info",     textVar: "--sev-info-text",     bgVar: "--sev-info-bg" },
 };
 
 export default function SeverityBadge({ severity }) {
-  const config = COLORS[severity] || COLORS.info;
+  const cfg = SEV[severity] || SEV.info;
   return (
     <span
-      className="text-xs font-bold px-2 py-0.5 rounded uppercase tracking-wider"
-      style={{ background: config.bg, color: config.text }}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "5px",
+        padding: "3px 9px",
+        fontSize: "11px",
+        fontFamily: "JetBrains Mono, monospace",
+        fontWeight: 600,
+        letterSpacing: "0.02em",
+        borderRadius: "var(--radius-full)",
+        background: `var(${cfg.bgVar})`,
+        color: `var(${cfg.textVar})`,
+        whiteSpace: "nowrap",
+      }}
     >
-      {config.label}
+      {/* Colored dot carries the urgency signal */}
+      <span
+        style={{
+          width: "6px",
+          height: "6px",
+          borderRadius: "50%",
+          background: `var(${cfg.textVar})`,
+          flexShrink: 0,
+        }}
+      />
+      {cfg.label}
     </span>
   );
 }

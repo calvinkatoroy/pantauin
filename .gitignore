@@ -47,7 +47,33 @@ Thumbs.db
 *.swp
 *.swo
 
+# Claude Code
+CLAUDE.md
+PROMPT.md
+
 # Playwright
 playwright/.auth/
 test-results/
 playwright-report/
+
+# Research data - never commit domain lists or scan results
+research/data/
+research/results/figures/
+research/results/tables/
+data/
+*.csv
+evidence/
+screenshots/
+
+# Thesis build artifacts
+thesis/*.pdf
+thesis/*.aux
+thesis/*.log
+thesis/*.out
+thesis/*.toc
+thesis/*.synctex.gz
+
+# Analysis artifacts
+*.pkl
+*.joblib
+notebooks/.ipynb_checkpoints/

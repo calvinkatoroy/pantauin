@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { getSchedules, createSchedule, updateSchedule, deleteSchedule } from "../lib/api.js";
+import { useAnimeStagger } from "../hooks/useAnimeStagger.js";
+import Breadcrumb from "../components/shared/Breadcrumb.jsx";
 
 const INTERVAL_LABELS = { daily: "Daily", weekly: "Weekly", monthly: "Monthly" };
 const INTERVAL_COLORS = {
-  daily:   { bg: "#172554", color: "#93c5fd" },
-  weekly:  { bg: "#14532d", color: "#86efac" },
-  monthly: { bg: "#1c1917", color: "#d6d3d1" },
+  daily:   { bg: "var(--accent-dim)",  color: "var(--accent)" },
+  weekly:  { bg: "var(--sev-low-bg)", color: "var(--sev-low-text)" },
+  monthly: { bg: "var(--bg-raised)",  color: "var(--text-secondary)" },
 };
 
 function formatDate(iso) {
@@ -18,12 +20,14 @@ function formatDate(iso) {
 
 export default function Schedules() {
   const [schedules, setSchedules] = useState([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [domain, setDomain] = useState("");
-  const [interval, setInterval] = useState("weekly");
+  const [total, setTotal]         = useState(0);
+  const [loading, setLoading]     = useState(true);
+  const [domain, setDomain]       = useState("");
+  const [interval, setInterval]   = useState("weekly");
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError]         = useState("");
+
+  const tbodyRef = useAnimeStagger([schedules]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,11 +77,12 @@ export default function Schedules() {
 
   return (
     <main className="max-w-3xl mx-auto px-6 py-10">
+      <Breadcrumb />
       <div className="mb-8">
-        <h1 className="text-2xl font-bold mb-1" style={{ fontFamily: "Syne, sans-serif", color: "#e2e8f0" }}>
+        <h1 className="text-2xl font-bold mb-1" style={{ fontFamily: "Syne, sans-serif", color: "var(--text-primary)" }}>
           Scheduled Scans
         </h1>
-        <p className="text-sm" style={{ color: "#6b7280" }}>
+        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
           Automatically scan a domain on a recurring schedule. Dispatches a full pipeline scan on each run.
         </p>
       </div>
@@ -86,7 +91,7 @@ export default function Schedules() {
       <form
         onSubmit={handleCreate}
         className="flex gap-2 flex-wrap mb-8 p-4 rounded-lg"
-        style={{ background: "#111318", border: "1px solid #2a2d35" }}
+        style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
       >
         <input
           type="text"
@@ -96,15 +101,17 @@ export default function Schedules() {
           required
           className="flex-1 rounded px-3 py-2 text-sm outline-none font-mono"
           style={{
-            background: "#0a0c0f", color: "#e2e8f0",
-            border: "1px solid #2a2d35", minWidth: "200px",
+            background: "var(--bg-base)",
+            color: "var(--text-primary)",
+            border: "1px solid var(--border)",
+            minWidth: "200px",
           }}
         />
         <select
           value={interval}
           onChange={(e) => setInterval(e.target.value)}
           className="rounded px-3 py-2 text-sm outline-none"
-          style={{ background: "#0a0c0f", color: "#e2e8f0", border: "1px solid #2a2d35" }}
+          style={{ background: "var(--bg-base)", color: "var(--text-primary)", border: "1px solid var(--border)" }}
         >
           <option value="daily">Daily</option>
           <option value="weekly">Weekly</option>
@@ -113,54 +120,59 @@ export default function Schedules() {
         <button
           type="submit"
           disabled={submitting}
-          className="px-5 py-2 rounded text-sm font-semibold transition-opacity"
+          className="px-5 py-2 rounded text-sm font-semibold"
           style={{
-            background: "#e8c547", color: "#0a0c0f",
+            background: "var(--accent)",
+            color: "var(--accent-text)",
             opacity: submitting ? 0.6 : 1,
           }}
         >
           {submitting ? "Scheduling…" : "Add Schedule"}
         </button>
         {error && (
-          <p className="w-full text-xs mt-1" style={{ color: "#f87171" }}>{error}</p>
+          <p className="w-full text-xs mt-1" style={{ color: "var(--sev-critical-text)" }}>{error}</p>
         )}
       </form>
 
       {/* Schedule list */}
       {loading ? (
-        <p className="text-sm" style={{ color: "#6b7280" }}>Loading…</p>
+        <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading…</p>
       ) : schedules.length === 0 ? (
         <div
           className="text-center py-16 rounded-lg"
-          style={{ background: "#111318", border: "1px solid #2a2d35" }}
+          style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}
         >
-          <p className="text-sm" style={{ color: "#4b5563" }}>No schedules yet. Add one above.</p>
+          <p className="text-sm" style={{ color: "var(--text-muted)" }}>No schedules yet. Add one above.</p>
         </div>
       ) : (
-        <div className="rounded-lg overflow-hidden" style={{ background: "#111318", border: "1px solid #2a2d35" }}>
-          <div className="px-4 py-3 border-b" style={{ borderColor: "#2a2d35" }}>
-            <span className="text-xs uppercase tracking-widest font-semibold" style={{ color: "#6b7280" }}>
+        <div className="rounded-lg overflow-hidden" style={{ background: "var(--bg-surface)", border: "1px solid var(--border)" }}>
+          <div className="px-4 py-3 border-b" style={{ borderColor: "var(--border)" }}>
+            <span className="text-xs uppercase tracking-widest font-semibold" style={{ color: "var(--text-muted)" }}>
               {total} schedule{total !== 1 ? "s" : ""}
             </span>
           </div>
           <table className="w-full text-sm">
             <thead>
-              <tr style={{ borderBottom: "1px solid #2a2d35" }}>
+              <tr style={{ borderBottom: "1px solid var(--border)" }}>
                 {["Domain", "Interval", "Enabled", "Last Run", "Next Run", ""].map((h) => (
-                  <th key={h} className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "#4b5563" }}>
+                  <th key={h} className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text-muted)" }}>
                     {h}
                   </th>
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody ref={tbodyRef}>
               {schedules.map((s) => (
-                <tr key={s.id} style={{ borderBottom: "1px solid #1a1d24", opacity: s.enabled ? 1 : 0.5 }}>
-                  <td className="px-4 py-3 font-mono text-xs" style={{ color: "#e2e8f0" }}>{s.domain}</td>
+                <tr
+                  key={s.id}
+                  data-stagger=""
+                  style={{ borderBottom: "1px solid var(--border-subtle)", opacity: s.enabled ? 1 : 0.5 }}
+                >
+                  <td className="px-4 py-3 font-mono text-xs" style={{ color: "var(--text-primary)" }}>{s.domain}</td>
                   <td className="px-4 py-3">
                     <span
                       className="text-xs px-2 py-0.5 rounded uppercase tracking-wider font-semibold"
-                      style={INTERVAL_COLORS[s.interval] || { bg: "#1f2937", color: "#9ca3af" }}
+                      style={INTERVAL_COLORS[s.interval] || { bg: "var(--bg-raised)", color: "var(--text-secondary)" }}
                     >
                       {INTERVAL_LABELS[s.interval] || s.interval}
                     </span>
@@ -169,7 +181,7 @@ export default function Schedules() {
                     <button
                       onClick={() => handleToggle(s)}
                       className="relative inline-flex h-5 w-9 rounded-full transition-colors"
-                      style={{ background: s.enabled ? "#e8c547" : "#374151" }}
+                      style={{ background: s.enabled ? "var(--accent)" : "var(--bg-overlay)" }}
                       title={s.enabled ? "Disable" : "Enable"}
                     >
                       <span
@@ -178,17 +190,17 @@ export default function Schedules() {
                       />
                     </button>
                   </td>
-                  <td className="px-4 py-3 text-xs" style={{ color: "#6b7280" }}>{formatDate(s.last_run_at)}</td>
-                  <td className="px-4 py-3 text-xs" style={{ color: s.enabled ? "#e2e8f0" : "#4b5563" }}>
+                  <td className="px-4 py-3 text-xs" style={{ color: "var(--text-muted)" }}>{formatDate(s.last_run_at)}</td>
+                  <td className="px-4 py-3 text-xs" style={{ color: s.enabled ? "var(--text-primary)" : "var(--text-muted)" }}>
                     {formatDate(s.next_run_at)}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={() => handleDelete(s.id)}
-                      className="text-xs px-2 py-1 rounded transition-colors"
-                      style={{ color: "#6b7280", background: "transparent" }}
-                      onMouseEnter={(e) => (e.target.style.color = "#f87171")}
-                      onMouseLeave={(e) => (e.target.style.color = "#6b7280")}
+                      className="text-xs px-2 py-1 rounded"
+                      style={{ color: "var(--text-muted)", background: "transparent" }}
+                      onMouseEnter={(e) => (e.target.style.color = "var(--sev-critical-text)")}
+                      onMouseLeave={(e) => (e.target.style.color = "var(--text-muted)")}
                     >
                       Delete
                     </button>

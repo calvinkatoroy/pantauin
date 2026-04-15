@@ -4,12 +4,14 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 from html import escape
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.audit import log_action
+from app.core.auth import require_role, CurrentUser
 from app.core.deps import get_db
 from app.models.scan import ScanJob
 
@@ -264,7 +266,9 @@ async def _generate_pdf(html: str) -> bytes:
 
 @router.get("/scan/{scan_id}/report", response_class=HTMLResponse)
 async def get_report(
+    request: Request,
     scan_id: str,
+    _: CurrentUser = Depends(require_role("admin", "analyst")),
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
     result = await db.execute(
@@ -277,6 +281,7 @@ async def get_report(
         raise HTTPException(status_code=404, detail="Scan not found")
 
     html = _render_report(job)
+    await log_action(request, "report.html_download", "scan", scan_id, {"domain": job.domain})
     return HTMLResponse(content=html, headers={
         "Content-Disposition": f'attachment; filename="pantauind-{job.domain}-{job.id[:8]}.html"'
     })
@@ -284,7 +289,9 @@ async def get_report(
 
 @router.get("/scan/{scan_id}/report/pdf")
 async def get_report_pdf(
+    request: Request,
     scan_id: str,
+    _: CurrentUser = Depends(require_role("admin", "analyst")),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
     result = await db.execute(
@@ -299,6 +306,7 @@ async def get_report_pdf(
     html = _render_pdf_html(job)
     pdf_bytes = await _generate_pdf(html)
     filename = f"pantauind-{job.domain}-{job.id[:8]}.pdf"
+    await log_action(request, "report.pdf_download", "scan", scan_id, {"domain": job.domain})
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",

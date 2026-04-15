@@ -1,17 +1,30 @@
 import { useState, useEffect } from "react";
 import { getKeywords, getKeywordStats, approveKeyword, rejectKeyword } from "../lib/api.js";
+import { useAnimeStagger } from "../hooks/useAnimeStagger.js";
+import Breadcrumb from "../components/shared/Breadcrumb.jsx";
 
 const STATUS_CONFIG = {
-  approved: { bg: "#14532d", text: "#86efac", label: "Approved" },
-  pending:  { bg: "#713f12", text: "#fde047", label: "Pending" },
-  rejected: { bg: "#7f1d1d", text: "#fca5a5", label: "Rejected" },
+  approved: { bg: "var(--sev-low-bg)",      text: "var(--sev-low-text)",      label: "Approved" },
+  pending:  { bg: "var(--sev-medium-bg)",   text: "var(--sev-medium-text)",   label: "Pending" },
+  rejected: { bg: "var(--sev-critical-bg)", text: "var(--sev-critical-text)", label: "Rejected" },
 };
+
+const STATS_CONFIG = [
+  { key: "total",          label: "Total",       bg: "var(--bg-raised)",        text: "var(--text-primary)" },
+  { key: "seed",           label: "Seed",        bg: "var(--sev-low-bg)",       text: "var(--sev-low-text)" },
+  { key: "auto_discovered",label: "Discovered",  bg: "var(--accent-dim)",       text: "var(--accent)" },
+  { key: "pending",        label: "Pending",     bg: "var(--sev-medium-bg)",    text: "var(--sev-medium-text)" },
+  { key: "approved",       label: "Approved",    bg: "var(--sev-low-bg)",       text: "var(--sev-low-text)" },
+  { key: "rejected",       label: "Rejected",    bg: "var(--sev-critical-bg)",  text: "var(--sev-critical-text)" },
+];
 
 export default function Keywords() {
   const [keywords, setKeywords] = useState([]);
-  const [stats, setStats] = useState(null);
-  const [filter, setFilter] = useState("all");
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats]       = useState(null);
+  const [filter, setFilter]     = useState("all");
+  const [loading, setLoading]   = useState(true);
+
+  const tbodyRef = useAnimeStagger([keywords]);
 
   async function load() {
     setLoading(true);
@@ -38,14 +51,15 @@ export default function Keywords() {
 
   return (
     <main className="max-w-4xl mx-auto px-6 py-10">
+      <Breadcrumb />
       <div className="mb-6">
         <h1
           className="text-xl font-bold mb-1"
-          style={{ fontFamily: "Syne, sans-serif", color: "#e8c547" }}
+          style={{ fontFamily: "Syne, sans-serif", color: "var(--accent)" }}
         >
           Keyword Intelligence
         </h1>
-        <p className="text-sm" style={{ color: "#6b7280" }}>
+        <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
           Keywords auto-discovered from confirmed gambling injection findings.
           Approved keywords are used in all future scans.
         </p>
@@ -54,20 +68,13 @@ export default function Keywords() {
       {/* Stats */}
       {stats && (
         <div className="grid grid-cols-3 gap-3 mb-6 sm:grid-cols-6">
-          {[
-            { label: "Total",       value: stats.total,           bg: "#1f2937", text: "#e2e8f0" },
-            { label: "Seed",        value: stats.seed,            bg: "#1e3a5f", text: "#93c5fd" },
-            { label: "Discovered",  value: stats.auto_discovered, bg: "#14532d", text: "#86efac" },
-            { label: "Pending",     value: stats.pending,         bg: "#713f12", text: "#fde047" },
-            { label: "Approved",    value: stats.approved,        bg: "#14532d", text: "#86efac" },
-            { label: "Rejected",    value: stats.rejected,        bg: "#7f1d1d", text: "#fca5a5" },
-          ].map((s) => (
+          {STATS_CONFIG.map((s) => (
             <div
               key={s.label}
               className="rounded-lg p-3 text-center"
               style={{ background: s.bg }}
             >
-              <p className="text-xl font-bold" style={{ color: s.text }}>{s.value}</p>
+              <p className="text-xl font-bold" style={{ color: s.text }}>{stats[s.key]}</p>
               <p className="text-xs mt-0.5" style={{ color: s.text, opacity: 0.7 }}>{s.label}</p>
             </div>
           ))}
@@ -80,10 +87,10 @@ export default function Keywords() {
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className="px-3 py-1.5 rounded text-xs font-semibold capitalize transition-colors"
+            className="px-3 py-1.5 rounded text-xs font-semibold capitalize"
             style={{
-              background: filter === f ? "#e8c547" : "#1f2937",
-              color: filter === f ? "#0a0c0f" : "#9ca3af",
+              background: filter === f ? "var(--accent)" : "var(--bg-raised)",
+              color: filter === f ? "var(--accent-text)" : "var(--text-secondary)",
             }}
           >
             {f}
@@ -93,70 +100,74 @@ export default function Keywords() {
 
       {/* Keyword table */}
       {loading ? (
-        <p className="text-sm" style={{ color: "#4b5563" }}>Loading…</p>
+        <p className="text-sm" style={{ color: "var(--text-muted)" }}>Loading…</p>
       ) : keywords.length === 0 ? (
-        <p className="text-sm" style={{ color: "#4b5563" }}>No keywords found.</p>
+        <p className="text-sm" style={{ color: "var(--text-muted)" }}>No keywords found.</p>
       ) : (
         <div
           className="rounded-lg overflow-hidden"
-          style={{ border: "1px solid #2a2d35" }}
+          style={{ border: "1px solid var(--border)" }}
         >
           <table className="w-full text-sm">
             <thead>
-              <tr style={{ background: "#1a1d24", borderBottom: "1px solid #2a2d35" }}>
-                <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider" style={{ color: "#6b7280" }}>Keyword</th>
-                <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wider" style={{ color: "#6b7280" }}>Sites</th>
-                <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wider" style={{ color: "#6b7280" }}>Confidence</th>
-                <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wider" style={{ color: "#6b7280" }}>Status</th>
-                <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wider" style={{ color: "#6b7280" }}>Action</th>
+              <tr style={{ background: "var(--bg-raised)", borderBottom: "1px solid var(--border)" }}>
+                {["Keyword", "Sites", "Confidence", "Status", "Action"].map((h) => (
+                  <th
+                    key={h}
+                    className={`${["Sites","Confidence","Status","Action"].includes(h) ? "text-center" : "text-left"} px-4 py-3 font-semibold text-xs uppercase tracking-wider`}
+                    style={{ color: "var(--text-muted)" }}
+                  >
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
-            <tbody>
-              {keywords.map((kw, i) => {
+            <tbody ref={tbodyRef}>
+              {keywords.map((kw) => {
                 const cfg = STATUS_CONFIG[kw.status] || STATUS_CONFIG.pending;
                 return (
                   <tr
                     key={kw.id}
-                    style={{
-                      background: i % 2 === 0 ? "#111318" : "#0f1116",
-                      borderBottom: "1px solid #1f2430",
-                    }}
+                    data-stagger=""
+                    style={{ borderBottom: "1px solid var(--border-subtle)" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = "var(--bg-raised)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = "")}
                   >
                     <td className="px-4 py-3">
-                      <span className="font-mono text-sm" style={{ color: "#e2e8f0" }}>
+                      <span className="font-mono text-sm" style={{ color: "var(--text-primary)" }}>
                         {kw.keyword}
                       </span>
                       {kw.is_seed && (
                         <span
                           className="ml-2 text-xs px-1.5 py-0.5 rounded"
-                          style={{ background: "#1e3a5f", color: "#93c5fd" }}
+                          style={{ background: "var(--sev-low-bg)", color: "var(--sev-low-text)" }}
                         >
                           seed
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 text-center" style={{ color: "#9ca3af" }}>
+                    <td className="px-4 py-3 text-center" style={{ color: "var(--text-secondary)" }}>
                       {kw.frequency}
                     </td>
                     <td className="px-4 py-3 text-center">
                       <div className="flex items-center justify-center gap-2">
                         <div
                           className="h-1.5 rounded-full"
-                          style={{
-                            width: "60px",
-                            background: "#1f2937",
-                            position: "relative",
-                          }}
+                          style={{ width: "60px", background: "var(--bg-overlay)", position: "relative" }}
                         >
                           <div
                             className="h-full rounded-full"
                             style={{
                               width: `${kw.confidence * 100}%`,
-                              background: kw.confidence > 0.7 ? "#22c55e" : kw.confidence > 0.4 ? "#eab308" : "#ef4444",
+                              background: kw.confidence > 0.7
+                                ? "var(--sev-low-text)"
+                                : kw.confidence > 0.4
+                                  ? "var(--sev-medium-text)"
+                                  : "var(--sev-critical-text)",
                             }}
                           />
                         </div>
-                        <span className="text-xs" style={{ color: "#6b7280" }}>
+                        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                           {Math.round(kw.confidence * 100)}%
                         </span>
                       </div>
@@ -174,15 +185,15 @@ export default function Keywords() {
                         <div className="flex gap-2 justify-center">
                           <button
                             onClick={() => handleApprove(kw.id)}
-                            className="text-xs px-2 py-1 rounded transition-opacity hover:opacity-80"
-                            style={{ background: "#14532d", color: "#86efac" }}
+                            className="text-xs px-2 py-1 rounded hover:opacity-80"
+                            style={{ background: "var(--sev-low-bg)", color: "var(--sev-low-text)" }}
                           >
                             Approve
                           </button>
                           <button
                             onClick={() => handleReject(kw.id)}
-                            className="text-xs px-2 py-1 rounded transition-opacity hover:opacity-80"
-                            style={{ background: "#7f1d1d", color: "#fca5a5" }}
+                            className="text-xs px-2 py-1 rounded hover:opacity-80"
+                            style={{ background: "var(--sev-critical-bg)", color: "var(--sev-critical-text)" }}
                           >
                             Reject
                           </button>
@@ -191,14 +202,14 @@ export default function Keywords() {
                       {kw.status === "approved" && !kw.is_seed && (
                         <button
                           onClick={() => handleReject(kw.id)}
-                          className="text-xs px-2 py-1 rounded transition-opacity hover:opacity-80"
-                          style={{ background: "#1f2937", color: "#9ca3af" }}
+                          className="text-xs px-2 py-1 rounded hover:opacity-80"
+                          style={{ background: "var(--bg-raised)", color: "var(--text-secondary)" }}
                         >
                           Reject
                         </button>
                       )}
                       {kw.is_seed && (
-                        <span className="text-xs" style={{ color: "#374151" }}>-</span>
+                        <span className="text-xs" style={{ color: "var(--text-muted)" }}>-</span>
                       )}
                     </td>
                   </tr>

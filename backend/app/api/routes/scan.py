@@ -2,7 +2,7 @@ import csv
 import io
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile, File
 from pydantic import BaseModel
@@ -10,9 +10,11 @@ from sqlalchemy import select, func, case
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.auth import require_role, CurrentUser
 from app.core.deps import get_db, redis_client
 from app.core.config import settings
 from app.core.limiter import limiter
+from app.core.audit import log_action
 from app.models.scan import ScanJob, Finding, ModuleStatus
 from app.schemas.scan import (
     ScanRequest, ScanResponse, ScanStatusResponse, ChildScanSummary,
@@ -30,7 +32,7 @@ class LifecyclePatch(BaseModel):
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-MODULES = ["dork_sweep", "page_crawl", "header_probe", "path_probe", "cms_detect", "shodan_probe"]
+MODULES = ["dork_sweep", "page_crawl", "header_probe", "path_probe", "cms_detect", "shodan_probe", "subdomain_enum"]
 TERMINAL_STATUSES = {"completed", "error", "cancelled"}
 SCAN_CACHE_TTL = 300  # seconds
 
@@ -40,6 +42,7 @@ SCAN_CACHE_TTL = 300  # seconds
 async def start_scan(
     request: Request,
     body: ScanRequest,
+    _: CurrentUser = Depends(require_role("admin", "analyst")),
     db: AsyncSession = Depends(get_db),
 ) -> ScanResponse:
     is_sweep = body.domain.startswith(".")
@@ -73,12 +76,15 @@ async def start_scan(
         job.celery_task_id = task.id
         await db.commit()
 
+    await log_action(request, "scan.start", "scan", job.id, {"domain": body.domain, "scan_type": job.scan_type})
     return ScanResponse(scan_id=job.id)
 
 
 @router.delete("/scan/{scan_id}", status_code=200)
 async def cancel_scan(
+    request: Request,
     scan_id: str,
+    _: CurrentUser = Depends(require_role("admin", "analyst")),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     result = await db.execute(select(ScanJob).where(ScanJob.id == scan_id))
@@ -93,8 +99,9 @@ async def cancel_scan(
         celery_app.control.revoke(job.celery_task_id, terminate=True)
 
     job.status = "cancelled"
-    job.updated_at = datetime.utcnow()
+    job.updated_at = datetime.now(timezone.utc)
     await db.commit()
+    await log_action(request, "scan.cancel", "scan", scan_id, {"domain": job.domain})
     return {"scan_id": scan_id, "status": "cancelled"}
 
 
@@ -193,8 +200,10 @@ async def get_scan(
 
 @router.patch("/finding/{finding_id}/lifecycle")
 async def patch_finding_lifecycle(
+    request: Request,
     finding_id: str,
     body: LifecyclePatch,
+    _: CurrentUser = Depends(require_role("admin", "analyst")),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     result = await db.execute(select(Finding).where(Finding.id == finding_id))
@@ -205,12 +214,14 @@ async def patch_finding_lifecycle(
     finding.lifecycle_status = body.lifecycle_status.value
     await db.commit()
 
-    # Invalidate Redis cache for the parent scan — lifecycle status changed
+    # Invalidate Redis cache for the parent scan - lifecycle status changed
     try:
         await redis_client.delete(f"scan:{finding.scan_job_id}")
     except Exception:
         pass
 
+    await log_action(request, "finding.lifecycle_update", "finding", finding_id,
+                     {"lifecycle_status": body.lifecycle_status.value, "scan_id": finding.scan_job_id})
     return {"id": finding_id, "lifecycle_status": finding.lifecycle_status}
 
 
@@ -353,8 +364,9 @@ async def get_trend(
 async def bulk_scan(
     request: Request,
     file: UploadFile = File(...),
+    _: CurrentUser = Depends(require_role("admin", "analyst")),
     db: AsyncSession = Depends(get_db),
-) -> BulkScanResponse:
+) -> BulkScanResponse:  # noqa: C901
     content = await file.read()
     text = content.decode("utf-8", errors="replace")
     reader = csv.reader(io.StringIO(text))
@@ -398,4 +410,6 @@ async def bulk_scan(
             run_scan.delay(job.id, domain)
         scans.append(BulkScanItem(domain=domain, scan_id=job.id))
 
+    await log_action(request, "scan.bulk_start", resource_type=None, resource_id=None,
+                     extra={"count": len(scans), "filename": file.filename})
     return BulkScanResponse(count=len(scans), scans=scans)

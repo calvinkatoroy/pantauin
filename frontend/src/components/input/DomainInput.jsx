@@ -2,6 +2,7 @@ import { useState } from "react";
 
 export default function DomainInput({ onSubmit, loading, error }) {
   const [domain, setDomain] = useState("");
+  const [focused, setFocused] = useState(false);
 
   function handleSubmit(e) {
     e.preventDefault();
@@ -11,62 +12,98 @@ export default function DomainInput({ onSubmit, loading, error }) {
   }
 
   const isSweep = domain.startsWith(".");
+  const canSubmit = !loading && !!domain.trim();
 
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-2xl mx-auto">
-      <div className="flex gap-3 items-center">
-        <div className="flex-1 relative">
+    <form onSubmit={handleSubmit}>
+      <div
+        style={{
+          display: "flex",
+          gap: "8px",
+          alignItems: "center",
+        }}
+      >
+        <div style={{ flex: 1, position: "relative" }}>
           <input
             type="text"
             value={domain}
             onChange={(e) => setDomain(e.target.value)}
-            placeholder="bkn.go.id or .go.id"
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
+            placeholder="bkn.go.id  or  .go.id"
             disabled={loading}
-            className="w-full px-4 py-3 rounded-lg text-sm font-mono outline-none transition-colors"
-            style={{
-              background: "#1a1d24",
-              border: "1px solid #2a2d35",
-              color: "#e2e8f0",
-              caretColor: "#e8c547",
-            }}
-            onFocus={(e) => (e.target.style.borderColor = "#e8c547")}
-            onBlur={(e) => (e.target.style.borderColor = "#2a2d35")}
             autoComplete="off"
             spellCheck="false"
+            style={{
+              width: "100%",
+              padding: "8px 12px",
+              fontFamily: "JetBrains Mono, monospace",
+              fontSize: "13px",
+              background: "var(--bg-surface)",
+              border: `1px solid ${focused ? "var(--accent)" : "var(--border)"}`,
+              borderRadius: "6px",
+              color: "var(--text-primary)",
+              outline: "none",
+              caretColor: "var(--accent)",
+              transition: "border-color 0.15s",
+            }}
           />
+          {isSweep && (
+            <span
+              style={{
+                position: "absolute",
+                right: "8px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                fontSize: "10px",
+                fontFamily: "JetBrains Mono, monospace",
+                fontWeight: 600,
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                padding: "2px 6px",
+                borderRadius: "3px",
+                background: "var(--sev-low-bg)",
+                color: "var(--sev-low-text)",
+                pointerEvents: "none",
+              }}
+            >
+              TLD Sweep
+            </span>
+          )}
         </div>
-        {isSweep && (
-          <span
-            className="flex-shrink-0 text-xs px-2 py-0.5 rounded font-semibold"
-            style={{ background: "#1e3a5f", color: "#93c5fd" }}
-          >
-            TLD Sweep
-          </span>
-        )}
+
         <button
           type="submit"
-          disabled={loading || !domain.trim()}
-          className="flex-shrink-0 px-6 py-3 rounded-lg text-sm font-semibold transition-opacity"
+          disabled={!canSubmit}
           style={{
-            background: "#e8c547",
-            color: "#0a0c0f",
-            opacity: loading || !domain.trim() ? 0.5 : 1,
-            cursor: loading || !domain.trim() ? "not-allowed" : "pointer",
+            padding: "8px 16px",
+            fontSize: "13px",
+            fontWeight: 500,
+            borderRadius: "6px",
+            border: "1px solid var(--border)",
+            background: canSubmit ? "var(--accent)" : "var(--bg-raised)",
+            color: canSubmit ? "var(--accent-text)" : "var(--text-muted)",
+            cursor: canSubmit ? "pointer" : "not-allowed",
+            whiteSpace: "nowrap",
+            flexShrink: 0,
+            transition: "background 0.1s, color 0.1s",
           }}
         >
-          {loading ? "Starting…" : "Scan"}
+          {loading ? "Scanning…" : "Scan"}
         </button>
       </div>
 
       {error && (
-        <p className="mt-3 text-sm" style={{ color: "#f87171" }}>
+        <p
+          style={{
+            marginTop: "8px",
+            fontSize: "12px",
+            color: "var(--sev-critical-text)",
+          }}
+        >
           {error}
         </p>
       )}
-
-      <p className="mt-3 text-xs" style={{ color: "#4b5563" }}>
-        Enter a .go.id or .ac.id domain, or a TLD like .go.id to sweep the entire namespace.
-      </p>
     </form>
   );
 }

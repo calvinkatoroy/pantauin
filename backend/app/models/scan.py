@@ -1,5 +1,9 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
 from sqlalchemy import String, Text, DateTime, ForeignKey, Integer, Float, Boolean, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.deps import Base
@@ -25,8 +29,8 @@ class ScanJob(Base):
     parent_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("scan_jobs.id"), nullable=True)
     previous_scan_id: Mapped[str | None] = mapped_column(String(36), nullable=True)  # diff baseline (no FK, informational)
     delta_summary: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON: {"new": N, "recurring": N, "resolved": N}
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     celery_task_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
@@ -59,7 +63,7 @@ class Finding(Base):
     cvss_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     lifecycle_status: Mapped[str] = mapped_column(String(30), default="open", nullable=False)  # open|in-remediation|resolved|accepted-risk
     delta_tag: Mapped[str | None] = mapped_column(String(20), nullable=True)  # new|recurring
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     scan_job: Mapped["ScanJob"] = relationship("ScanJob", back_populates="findings")
 
@@ -87,9 +91,27 @@ class ScanSchedule(Base):
     domain: Mapped[str] = mapped_column(String(255), nullable=False)
     interval: Mapped[str] = mapped_column(String(20), nullable=False)  # daily|weekly|monthly
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    last_run_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    next_run_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    __table_args__ = (
+        Index("ix_audit_logs_created_at", "created_at"),
+        Index("ix_audit_logs_actor", "actor"),
+        Index("ix_audit_logs_action", "action"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    action: Mapped[str] = mapped_column(String(50), nullable=False)          # scan.start, scan.cancel, etc.
+    actor: Mapped[str] = mapped_column(String(100), nullable=False, default="anonymous")  # masked api key
+    ip_address: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    resource_type: Mapped[str | None] = mapped_column(String(30), nullable=True)  # scan|finding|schedule|report
+    resource_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    extra: Mapped[str | None] = mapped_column(Text, nullable=True)            # JSON metadata
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
 class DiscoveredKeyword(Base):
@@ -101,6 +123,23 @@ class DiscoveredKeyword(Base):
     confidence: Mapped[float] = mapped_column(Float, default=0.0)    # 0.0 – 1.0
     status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|approved|rejected
     source_urls: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON array of source URLs
-    first_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_seed: Mapped[bool] = mapped_column(Boolean, default=False)    # True = original keywords.py seed terms
+
+
+class User(Base):
+    __tablename__ = "users"
+    __table_args__ = (
+        Index("ix_users_username", "username", unique=True),
+        Index("ix_users_api_key", "api_key", unique=True),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    username: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="analyst")  # admin|analyst|read-only
+    api_key: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)    # personal key (UUID4, no dashes)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

@@ -7,7 +7,7 @@ run_scan tasks for each discovered domain.
 """
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 from app.worker import celery_app
@@ -37,7 +37,7 @@ async def _run_tld_sweep_async(scan_id: str, tld: str) -> None:
             result = await db.execute(select(ScanJob).where(ScanJob.id == scan_id))
             job = result.scalar_one()
             job.status = "running"
-            job.updated_at = datetime.utcnow()
+            job.updated_at = datetime.now(timezone.utc)
             await db.commit()
 
             # Mark dork_sweep module as running
@@ -129,7 +129,7 @@ async def _run_tld_sweep_async(scan_id: str, tld: str) -> None:
             result = await db.execute(select(ScanJob).where(ScanJob.id == scan_id))
             job = result.scalar_one()
             job.status = "completed"
-            job.updated_at = datetime.utcnow()
+            job.updated_at = datetime.now(timezone.utc)
             await db.commit()
 
             logger.info(
@@ -147,10 +147,12 @@ async def _run_tld_sweep_async(scan_id: str, tld: str) -> None:
                 if job:
                     job.status = "error"
                     job.error = str(e)
-                    job.updated_at = datetime.utcnow()
+                    job.updated_at = datetime.now(timezone.utc)
                     await err_db.commit()
 
 
 @celery_app.task(name="tld_sweep_tasks.run_tld_sweep", bind=True, max_retries=0)
 def run_tld_sweep(self, scan_id: str, tld: str) -> None:
+    from app.core.deps import engine
+    engine.sync_engine.dispose(close=False)
     asyncio.run(_run_tld_sweep_async(scan_id, tld))

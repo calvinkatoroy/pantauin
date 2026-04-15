@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-export default function EvidenceViewer({ screenshotPath, screenshotHash }) {
+export default function EvidenceViewer({ screenshotPath }) {
   const [expanded, setExpanded] = useState(false);
 
   if (!screenshotPath) return null;
@@ -8,30 +8,41 @@ export default function EvidenceViewer({ screenshotPath, screenshotHash }) {
   const imgUrl = `/evidence/${screenshotPath}`;
 
   return (
-    <div className="mt-3">
+    <div style={{ marginTop: "12px" }}>
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="flex items-center gap-2 text-xs transition-colors"
-        style={{ color: "#e8c547" }}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+          fontSize: "12px",
+          background: "none",
+          border: "none",
+          color: "var(--accent)",
+          cursor: "pointer",
+          padding: 0,
+          transition: `color var(--duration-fast) var(--transition-fade)`,
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.color = "var(--accent-hover)")}
+        onMouseLeave={(e) => (e.currentTarget.style.color = "var(--accent)")}
       >
-        <span>{expanded ? "▼" : "▶"}</span>
+        <span style={{ fontSize: "10px" }}>{expanded ? "▼" : "▶"}</span>
         {expanded ? "Hide screenshot" : "View evidence screenshot"}
       </button>
 
       {expanded && (
-        <div className="mt-2">
+        <div style={{ marginTop: "8px" }}>
           <img
             src={imgUrl}
             alt="Evidence screenshot"
-            className="rounded border max-w-full"
-            style={{ borderColor: "#2a2d35" }}
+            style={{
+              display: "block",
+              maxWidth: "100%",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--border)",
+            }}
             loading="lazy"
           />
-          {screenshotHash && (
-            <p className="mt-1 text-xs font-mono" style={{ color: "#4b5563" }}>
-              SHA256: {screenshotHash}
-            </p>
-          )}
         </div>
       )}
     </div>

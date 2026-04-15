@@ -7,11 +7,11 @@ export default defineConfig({
     port: 5173,
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
+        target: process.env.BACKEND_URL || "http://localhost:8000",
         changeOrigin: true,
       },
       "/evidence": {
-        target: "http://localhost:8000",
+        target: process.env.BACKEND_URL || "http://localhost:8000",
         changeOrigin: true,
       },
     },

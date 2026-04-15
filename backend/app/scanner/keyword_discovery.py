@@ -14,7 +14,7 @@ import logging
 import re
 import string
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,7 +25,9 @@ from app.scanner.keywords import GAMBLING_KEYWORDS, INJECTED_ANCHOR_PATTERNS
 logger = logging.getLogger(__name__)
 
 # Auto-approve threshold - seen on this many distinct sites = trusted
-AUTO_APPROVE_THRESHOLD = 3
+# Set conservatively: government news articles about gambling are common on .go.id,
+# so a word must appear on many independently compromised sites before trusting it.
+AUTO_APPROVE_THRESHOLD = 5
 
 # Minimum character length for a candidate keyword
 MIN_KEYWORD_LEN = 4
@@ -33,8 +35,11 @@ MIN_KEYWORD_LEN = 4
 # Maximum words in a candidate n-gram phrase
 MAX_NGRAM_WORDS = 4
 
-# Indonesian stopwords to filter out
+# Indonesian stopwords to filter out.
+# Includes generic government/news vocabulary that co-occurs with "judi" in
+# legitimate government articles about gambling dangers - NOT injection markers.
 INDONESIAN_STOPWORDS = {
+    # Core function words
     "yang", "dan", "di", "ke", "dari", "untuk", "dengan", "pada", "adalah",
     "ini", "itu", "ada", "tidak", "juga", "dalam", "atau", "sudah", "akan",
     "bisa", "kami", "kita", "mereka", "anda", "saya", "dia", "ber", "ter",
@@ -43,11 +48,22 @@ INDONESIAN_STOPWORDS = {
     "oleh", "karena", "saat", "setelah", "sebelum", "ketika", "jika",
     "maka", "agar", "namun", "tetapi", "tapi", "serta", "bahwa",
     "telah", "sedang", "masih", "hanya", "semua", "setiap", "banyak",
-    "sangat", "sangat", "cukup", "sama", "lain", "baru", "lama",
+    "sangat", "cukup", "sama", "lain", "baru", "lama",
     # Common web/HTML terms to ignore
     "http", "https", "www", "com", "html", "php", "asp", "css", "js",
     "home", "page", "menu", "link", "klik", "click", "here", "more",
     "read", "baca", "lihat", "view", "next", "prev", "back",
+    # Generic government/news vocabulary - these appear in ARTICLES ABOUT gambling,
+    # not in injected gambling content. Including them here prevents false discovery
+    # when the discovery system runs on a legitimate government page caught by a
+    # broad dork query.
+    "beranda", "berita", "menjadi", "masyarakat", "anak", "agama", "dampak",
+    "tersebut", "situs", "media", "internet", "artikel", "data", "pemerintah",
+    "indonesia", "informasi", "digital", "nasional", "sosial", "moral",
+    "edukasi", "upaya", "keluarga", "individu", "ekonomi", "kasus",
+    "bahaya", "dampak", "larangan", "pencegahan", "penanganan",
+    "modus", "sebagai", "secara", "bagi", "luar", "aktif", "kolom",
+    "orang", "tahun", "bulan", "jumat", "senin", "selasa", "rabu", "kamis",
 }
 
 # Patterns that strongly signal gambling context - used to validate candidates
@@ -135,7 +151,9 @@ def extract_candidates(page_text: str, known_keywords: list[str]) -> list[tuple[
             break
         if len(candidate) < MIN_KEYWORD_LEN:
             continue
-        if not CONTEXT_RE.search(candidate) and not CONTEXT_RE.search(page_text):
+        # Candidate itself must contain a gambling signal - checking only the page
+        # would pass every word on any government news article that mentions gambling.
+        if not CONTEXT_RE.search(candidate):
             continue
 
         score = _score_candidate(candidate, page_text)
@@ -181,7 +199,7 @@ async def process_finding(
             # Auto-approve if threshold reached
             if existing.frequency >= AUTO_APPROVE_THRESHOLD and existing.status == "pending":
                 existing.status = "approved"
-                existing.approved_at = datetime.utcnow()
+                existing.approved_at = datetime.now(timezone.utc)
                 logger.info("Auto-approved keyword: '%s' (seen on %d sites)", keyword, existing.frequency)
 
         else:
@@ -235,6 +253,6 @@ async def seed_keywords(db: AsyncSession) -> None:
                 confidence=1.0,
                 status="approved",
                 is_seed=True,
-                approved_at=datetime.utcnow(),
+                approved_at=datetime.now(timezone.utc),
             ))
     await db.commit()

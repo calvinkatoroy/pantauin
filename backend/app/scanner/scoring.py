@@ -52,10 +52,10 @@ def compute_cvss_lite(
     if has_screenshot:
         score = min(score + 0.3, 10.0)
 
-    if len(detected_keywords) >= 5:
-        score = min(score + 0.2, 10.0)
-    elif len(detected_keywords) >= 10:
+    if len(detected_keywords) >= 10:
         score = min(score + 0.4, 10.0)
+    elif len(detected_keywords) >= 5:
+        score = min(score + 0.2, 10.0)
 
     if len(injected_links) >= 3:
         score = min(score + 0.3, 10.0)

@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from app.worker import celery_app
 
@@ -19,7 +19,7 @@ async def _dispatch_due_async() -> None:
     from app.core.config import settings
     from app.models.scan import ScanJob, ModuleStatus, ScanSchedule
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(ScanSchedule).where(
@@ -80,4 +80,6 @@ async def _dispatch_due_async() -> None:
 
 @celery_app.task(name="schedule_tasks.dispatch_due_schedules")
 def dispatch_due_schedules() -> None:
+    from app.core.deps import engine
+    engine.sync_engine.dispose(close=False)
     asyncio.run(_dispatch_due_async())

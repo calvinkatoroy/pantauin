@@ -1,7 +1,7 @@
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Callable
 
 from sqlalchemy import select
@@ -10,9 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.deps import AsyncSessionLocal
+from app.core.notifications import notify_critical_findings
 from app.core.webhook import notify_webhook
 from app.models.scan import ScanJob, Finding, ModuleStatus
-from app.scanner import dork_sweep, page_crawl, header_probe, path_probe, cms_detect, shodan_probe
+from app.scanner import dork_sweep, page_crawl, header_probe, path_probe, cms_detect, shodan_probe, subdomain_enum
 from app.scanner import keyword_discovery
 from app.scanner.scoring import compute_cvss_lite
 
@@ -98,6 +99,13 @@ async def _adapter_shodan_probe(
     return result, result.get("findings") or []
 
 
+async def _adapter_subdomain_enum(
+    domain: str, scan_id: str, ctx: dict
+) -> tuple[dict, list[dict]]:
+    result = await subdomain_enum.run(domain, scan_id)
+    return result, result.get("findings") or []
+
+
 PIPELINE: list[PipelineModule] = [
     PipelineModule(name="dork_sweep", adapter=_adapter_dork_sweep),
     PipelineModule(name="page_crawl", adapter=_adapter_page_crawl),
@@ -105,6 +113,7 @@ PIPELINE: list[PipelineModule] = [
     PipelineModule(name="path_probe", adapter=_adapter_path_probe),
     PipelineModule(name="cms_detect", adapter=_adapter_cms_detect),
     PipelineModule(name="shodan_probe", adapter=_adapter_shodan_probe),
+    PipelineModule(name="subdomain_enum", adapter=_adapter_subdomain_enum),
 ]
 
 
@@ -230,7 +239,7 @@ async def run_pipeline(scan_id: str, domain: str) -> None:
             result = await db.execute(select(ScanJob).where(ScanJob.id == scan_id))
             job = result.scalar_one()
             job.status = "running"
-            job.updated_at = datetime.utcnow()
+            job.updated_at = datetime.now(timezone.utc)
             await db.commit()
 
             ctx: dict = {"db": db}
@@ -267,32 +276,35 @@ async def run_pipeline(scan_id: str, domain: str) -> None:
                 )
             )
             critical_findings = critical_result.scalars().all()
-            if critical_findings and settings.webhook_url:
-                await notify_webhook(
-                    settings.webhook_url,
+            if critical_findings:
+                findings_payload = [
                     {
-                        "event": "critical_finding",
-                        "domain": domain,
-                        "scan_id": scan_id,
-                        "critical_count": len(critical_findings),
-                        "findings": [
-                            {
-                                "title": f.title,
-                                "url": f.url,
-                                "severity": f.severity,
-                                "cvss_score": f.cvss_score,
-                                "module": f.module,
-                            }
-                            for f in critical_findings
-                        ],
-                    },
-                )
+                        "title": f.title,
+                        "url": f.url,
+                        "severity": f.severity,
+                        "cvss_score": f.cvss_score,
+                        "module": f.module,
+                    }
+                    for f in critical_findings
+                ]
+                if settings.webhook_url:
+                    await notify_webhook(
+                        settings.webhook_url,
+                        {
+                            "event": "critical_finding",
+                            "domain": domain,
+                            "scan_id": scan_id,
+                            "critical_count": len(critical_findings),
+                            "findings": findings_payload,
+                        },
+                    )
+                await notify_critical_findings(domain, scan_id, findings_payload)
 
             # Mark job as completed
             result = await db.execute(select(ScanJob).where(ScanJob.id == scan_id))
             job = result.scalar_one()
             job.status = "completed"
-            job.updated_at = datetime.utcnow()
+            job.updated_at = datetime.now(timezone.utc)
             await db.commit()
 
         except Exception as e:
@@ -303,5 +315,5 @@ async def run_pipeline(scan_id: str, domain: str) -> None:
                 if job:
                     job.status = "error"
                     job.error = str(e)
-                    job.updated_at = datetime.utcnow()
+                    job.updated_at = datetime.now(timezone.utc)
                     await err_db.commit()

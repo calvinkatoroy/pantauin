@@ -1,8 +1,10 @@
 /**
  * TrendChart - SVG bar chart showing finding counts over multiple scans.
- * No external chart libraries - pure SVG + Tailwind.
+ * No external chart libraries - pure SVG + Anime.js for bar-grow entry.
  */
+import { useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
+import anime from "animejs";
 
 const WIDTH = 600;
 const HEIGHT = 160;
@@ -20,9 +22,40 @@ function formatShortDate(iso) {
 }
 
 export default function TrendChart({ domain, points }) {
+  const svgRef = useRef(null);
+
+  // Animate bars growing up from baseline when data changes
+  useEffect(() => {
+    if (!svgRef.current || !points?.length) return;
+
+    const bars = svgRef.current.querySelectorAll(".chart-bar");
+    if (!bars.length) return;
+
+    anime({
+      targets: bars,
+      height: (el) => [0, parseFloat(el.dataset.finalH)],
+      y: (el) => [CHART_H, parseFloat(el.dataset.finalY)],
+      duration: 480,
+      delay: anime.stagger(28, { start: 60 }),
+      easing: "cubicBezier(0.16, 1, 0.30, 1)",
+    });
+
+    // Fade in totals after bars finish
+    const labels = svgRef.current.querySelectorAll(".chart-label");
+    if (labels.length) {
+      anime({
+        targets: labels,
+        opacity: [0, 1],
+        duration: 200,
+        delay: anime.stagger(28, { start: 320 }),
+        easing: "linear",
+      });
+    }
+  }, [points]);
+
   if (!points || points.length === 0) {
     return (
-      <p className="text-sm" style={{ color: "#4b5563" }}>
+      <p className="text-sm" style={{ color: "var(--text-muted)" }}>
         No trend data - only one scan completed for this domain.
       </p>
     );
@@ -36,26 +69,32 @@ export default function TrendChart({ domain, points }) {
 
   return (
     <div
-      className="rounded-lg p-4 mb-6"
-      style={{ background: "#111318", border: "1px solid #2a2d35" }}
+      style={{
+        background: "var(--bg-surface)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--radius-md)",
+        padding: "16px",
+        marginBottom: "24px",
+      }}
     >
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-semibold" style={{ color: "#6b7280" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+        <p style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)" }}>
           TREND -{" "}
-          <span className="font-mono" style={{ color: "#e2e8f0" }}>
+          <span style={{ fontFamily: "JetBrains Mono, monospace", color: "var(--text-primary)", letterSpacing: 0 }}>
             {domain}
           </span>
-          <span style={{ color: "#4b5563" }}> ({points.length} scans)</span>
+          <span style={{ color: "var(--text-muted)", fontWeight: 400 }}> ({points.length} scans)</span>
         </p>
-        <div className="flex gap-3 text-xs" style={{ color: "#4b5563" }}>
-          <span><span style={{ color: "#ef4444" }}>■</span> Critical</span>
-          <span><span style={{ color: "#f97316" }}>■</span> High</span>
-          <span><span style={{ color: "#eab308" }}>■</span> Med</span>
-          <span><span style={{ color: "#3b82f6" }}>■</span> Low</span>
+        <div style={{ display: "flex", gap: "12px", fontSize: "11px", color: "var(--text-muted)" }}>
+          <span><span style={{ color: "var(--sev-critical-text)" }}>■</span> Crit</span>
+          <span><span style={{ color: "var(--sev-high-text)" }}>■</span> High</span>
+          <span><span style={{ color: "var(--sev-medium-text)" }}>■</span> Med</span>
+          <span><span style={{ color: "var(--sev-low-text)" }}>■</span> Low</span>
         </div>
       </div>
 
       <svg
+        ref={svgRef}
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
         style={{ width: "100%", height: "auto", overflow: "visible" }}
       >
@@ -64,68 +103,87 @@ export default function TrendChart({ domain, points }) {
           const total = fc.total || 0;
           const barH = total === 0 ? 2 : Math.max(4, (total / maxTotal) * CHART_H);
           const x = BAR_GAP + i * (barW + BAR_GAP);
-          const y = CHART_H - barH;
 
-          // Stacked segments
           const segments = [
-            { count: fc.low,      color: "#3b82f6" },
-            { count: fc.medium,   color: "#eab308" },
-            { count: fc.high,     color: "#f97316" },
-            { count: fc.critical, color: "#ef4444" },
+            { count: fc.low,      color: "var(--sev-low-text)" },
+            { count: fc.medium,   color: "var(--sev-medium-text)" },
+            { count: fc.high,     color: "var(--sev-high-text)" },
+            { count: fc.critical, color: "var(--sev-critical-text)" },
           ];
 
+          // Compute final stack positions for Anime.js data attributes
           let stackY = CHART_H;
-          const rects = segments.map(({ count, color }) => {
+          const segmentData = segments.map(({ count, color }) => {
             if (!count) return null;
             const h = Math.max(2, (count / maxTotal) * CHART_H);
             stackY -= h;
-            return (
-              <rect
-                key={color}
-                x={x}
-                y={stackY}
-                width={barW}
-                height={h}
-                fill={color}
-                opacity={0.85}
-                rx={2}
-              />
-            );
+            return { h, y: stackY, color };
           });
 
           return (
             <g key={pt.scan_id}>
-              {/* Background bar */}
+              {/* Background track */}
               <rect
                 x={x}
                 y={0}
                 width={barW}
                 height={CHART_H}
-                fill="#1a1d24"
+                fill="var(--bg-raised)"
                 rx={2}
               />
+
               {total === 0 && (
-                <rect x={x} y={CHART_H - 2} width={barW} height={2} fill="#2a2d35" rx={1} />
+                <rect
+                  x={x}
+                  y={CHART_H - 2}
+                  width={barW}
+                  height={2}
+                  fill="var(--border)"
+                  rx={1}
+                />
               )}
-              {rects}
+
+              {/* Stacked bars - start at y=CHART_H height=0, Anime.js animates to finals */}
+              {segmentData.map((seg, si) => {
+                if (!seg) return null;
+                return (
+                  <rect
+                    key={si}
+                    className="chart-bar"
+                    x={x}
+                    y={CHART_H}        /* initial: at baseline */
+                    width={barW}
+                    height={0}         /* initial: zero height */
+                    fill={seg.color}
+                    opacity={0.9}
+                    rx={si === segmentData.filter(Boolean).length - 1 ? 2 : 0}
+                    data-final-h={seg.h}
+                    data-final-y={seg.y}
+                  />
+                );
+              })}
+
               {/* Date label */}
               <text
                 x={x + barW / 2}
                 y={HEIGHT - 6}
                 textAnchor="middle"
                 fontSize={9}
-                fill="#4b5563"
+                fill="var(--text-muted)"
               >
                 {formatShortDate(pt.created_at)}
               </text>
-              {/* Total label on top */}
+
+              {/* Total count - fades in via Anime.js after bars grow */}
               {total > 0 && (
                 <text
+                  className="chart-label"
                   x={x + barW / 2}
-                  y={Math.max(10, CHART_H - barH - 3)}
+                  y={Math.max(10, CHART_H - barH - 4)}
                   textAnchor="middle"
                   fontSize={9}
-                  fill="#9ca3af"
+                  fill="var(--text-secondary)"
+                  opacity={0}  /* starts invisible, Anime.js fades in */
                 >
                   {total}
                 </text>

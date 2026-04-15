@@ -23,6 +23,7 @@ from urllib.parse import urlparse, quote
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
 
 from app.core.config import settings
+from app.core.storage import upload_evidence
 from app.scanner.keywords import GAMBLING_KEYWORDS, INJECTED_ANCHOR_PATTERNS, GAMBLING_DOMAIN_PATTERNS
 
 # Active keyword list - replaced at scan time with DB-loaded keywords
@@ -138,9 +139,16 @@ async def crawl_url(url: str, scan_id: str) -> dict | None:
             await page.screenshot(path=screenshot_path, full_page=True)
             await browser.close()
 
-            # SHA256 hash
+            # SHA256 hash (computed before potential S3 upload removes local file)
             with open(screenshot_path, "rb") as f:
                 screenshot_hash = hashlib.sha256(f.read()).hexdigest()
+
+            # Upload to S3/R2 if configured; object_key = "{scan_id}/{filename}"
+            object_key = f"{scan_id}/{screenshot_name}"
+            uploaded = upload_evidence(screenshot_path, object_key)
+            # After successful upload the local file is gone; keep the same
+            # relative key format so the DB value is storage-mode agnostic.
+            stored_path = object_key if uploaded else f"{scan_id}/{screenshot_name}"
 
             # Determine severity
             hidden_links = [l for l in injected_links if l.get("hidden")]
@@ -174,7 +182,7 @@ async def crawl_url(url: str, scan_id: str) -> dict | None:
                     f"Injected links: {len(injected_links)}."
                 ),
                 "evidence_text": text_content[:2000] if text_content else None,
-                "screenshot_path": f"{scan_id}/{screenshot_name}",
+                "screenshot_path": stored_path,
                 "screenshot_hash": screenshot_hash,
                 "detected_keywords": keywords_found,
                 "injected_links": [l["href"] for l in injected_links if l.get("href")][:10],

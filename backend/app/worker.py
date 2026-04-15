@@ -9,6 +9,7 @@ celery_app = Celery(
         "app.tasks.scan_tasks",
         "app.tasks.tld_sweep_tasks",
         "app.tasks.schedule_tasks",
+        "app.tasks.retention_tasks",
     ],
 )
 
@@ -24,6 +25,10 @@ celery_app.conf.update(
         "dispatch-due-schedules": {
             "task": "schedule_tasks.dispatch_due_schedules",
             "schedule": 60.0,  # check every 60 seconds
+        },
+        "purge-old-data": {
+            "task": "retention_tasks.purge_old_data",
+            "schedule": 86400.0,  # run once daily (seconds)
         },
     },
     beat_schedule_filename="/app/celerybeat-schedule",

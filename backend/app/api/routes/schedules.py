@@ -1,10 +1,12 @@
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import log_action
+from app.core.auth import require_role, CurrentUser
 from app.core.deps import get_db
 from app.models.scan import ScanSchedule
 from app.schemas.schedule import (
@@ -27,10 +29,12 @@ def _next_run(interval: str, from_dt: datetime) -> datetime:
 
 @router.post("/schedules", response_model=ScheduleResponse, status_code=201)
 async def create_schedule(
+    request: Request,
     body: ScheduleRequest,
+    _: CurrentUser = Depends(require_role("admin", "analyst")),
     db: AsyncSession = Depends(get_db),
 ) -> ScheduleResponse:
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     schedule = ScanSchedule(
         domain=body.domain,
         interval=body.interval,
@@ -40,6 +44,8 @@ async def create_schedule(
     db.add(schedule)
     await db.commit()
     await db.refresh(schedule)
+    await log_action(request, "schedule.create", "schedule", schedule.id,
+                     {"domain": body.domain, "interval": body.interval})
     return ScheduleResponse.model_validate(schedule)
 
 
@@ -67,8 +73,10 @@ async def list_schedules(
 
 @router.patch("/schedules/{schedule_id}", response_model=ScheduleResponse)
 async def update_schedule(
+    request: Request,
     schedule_id: str,
     body: SchedulePatch,
+    _: CurrentUser = Depends(require_role("admin", "analyst")),
     db: AsyncSession = Depends(get_db),
 ) -> ScheduleResponse:
     result = await db.execute(select(ScanSchedule).where(ScanSchedule.id == schedule_id))
@@ -80,21 +88,27 @@ async def update_schedule(
         schedule.enabled = body.enabled
     if body.interval is not None:
         schedule.interval = body.interval
-        schedule.next_run_at = _next_run(body.interval, datetime.utcnow())
+        schedule.next_run_at = _next_run(body.interval, datetime.now(timezone.utc))
 
     await db.commit()
     await db.refresh(schedule)
+    await log_action(request, "schedule.update", "schedule", schedule_id,
+                     {k: v for k, v in body.model_dump().items() if v is not None})
     return ScheduleResponse.model_validate(schedule)
 
 
 @router.delete("/schedules/{schedule_id}", status_code=204)
 async def delete_schedule(
+    request: Request,
     schedule_id: str,
+    _: CurrentUser = Depends(require_role("admin", "analyst")),
     db: AsyncSession = Depends(get_db),
 ) -> None:
     result = await db.execute(select(ScanSchedule).where(ScanSchedule.id == schedule_id))
     schedule = result.scalar_one_or_none()
     if not schedule:
         raise HTTPException(status_code=404, detail="Schedule not found")
+    domain = schedule.domain
     await db.delete(schedule)
     await db.commit()
+    await log_action(request, "schedule.delete", "schedule", schedule_id, {"domain": domain})

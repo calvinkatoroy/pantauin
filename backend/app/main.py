@@ -2,6 +2,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -9,7 +10,8 @@ from app.core.config import settings
 from app.core.deps import init_db
 from app.core.auth import verify_api_key
 from app.core.limiter import limiter
-from app.api.routes import scan, report, keywords, schedules
+from app.core.storage import get_evidence_url
+from app.api.routes import scan, report, keywords, schedules, audit, dashboard, auth
 
 
 @asynccontextmanager
@@ -42,10 +44,26 @@ app.include_router(scan.router, prefix="/api", dependencies=_auth)
 app.include_router(report.router, prefix="/api", dependencies=_auth)
 app.include_router(keywords.router, prefix="/api", dependencies=_auth)
 app.include_router(schedules.router, prefix="/api", dependencies=_auth)
+app.include_router(audit.router, prefix="/api", dependencies=_auth)
+app.include_router(dashboard.router, prefix="/api", dependencies=_auth)
+# Auth routes have NO global auth dependency - login/setup must be public
+app.include_router(auth.router, prefix="/api")
 
-# Serve evidence screenshots as static files
-if os.path.exists(settings.evidence_dir):
-    app.mount("/evidence", StaticFiles(directory=settings.evidence_dir), name="evidence")
+# Evidence serving: redirect to S3/R2 presigned URL when configured,
+# otherwise serve as static files from the local evidence directory.
+@app.get("/evidence/{scan_id}/{filename}", include_in_schema=False)
+async def serve_evidence(scan_id: str, filename: str):
+    object_key = f"{scan_id}/{filename}"
+    url = get_evidence_url(object_key)
+    if url:
+        return RedirectResponse(url=url)
+    # Fall through to static files below (or 404 if local file missing)
+    from fastapi import HTTPException
+    local_path = os.path.join(settings.evidence_dir, scan_id, filename)
+    if not os.path.exists(local_path):
+        raise HTTPException(status_code=404, detail="Evidence file not found")
+    from fastapi.responses import FileResponse
+    return FileResponse(local_path, media_type="image/png")
 
 
 @app.get("/health")
