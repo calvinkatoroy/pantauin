@@ -62,7 +62,7 @@ ATTACK_SURFACE_CSV = DATA_PROCESSED / "attack_surface.csv"
 # ---------------------------------------------------------------------------
 # Target TLDs
 # ---------------------------------------------------------------------------
-TARGET_TLDS: list[str] = ["go.id", "ac.id"]
+TARGET_TLDS: list[str] = ["go.id"]
 
 # crt.sh query URLs - one per TLD
 CRTSH_URLS: dict[str, str] = {
@@ -71,30 +71,68 @@ CRTSH_URLS: dict[str, str] = {
 }
 
 # ---------------------------------------------------------------------------
-# Gambling keywords (Bahasa Indonesia + common variants)
-# Used in detect (httpx+BS4) and confirm (Playwright) steps.
-# Ordered roughly by severity/confidence of infection signal.
+# Multi-source enumeration (fallbacks for crt.sh outages, union for coverage)
+#
+# CT-log sources run in parallel and union their results.
+# Subfinder is invoked only if all CT sources return zero domains.
+# Each source is skipped silently if its credentials/binary are missing.
 # ---------------------------------------------------------------------------
-GAMBLING_KEYWORDS: list[str] = [
-    # Multi-word high-confidence phrases
-    "slot gacor", "slot online", "judi online", "judi bola", "judi slot",
-    "togel online", "situs judi", "agen judi", "bandar judi",
-    "poker online", "casino online", "taruhan online", "taruhan bola",
-    "bocoran slot", "rtp slot", "rtp live", "link slot", "daftar slot",
-    "login slot", "deposit slot", "agen slot", "link alternatif",
-    "toto slot", "mahjong ways", "sweet bonanza", "gates of olympus",
-    "starlight princess", "pg soft", "pragmatic play",
-    # High-signal single words
-    "sbobet", "togel", "toto", "maxwin", "jackpot", "scatter",
-    "gacor", "judi", "taruhan", "bandar",
-    # Common game names / brand injections
-    "zeus slot", "mahjong", "habanero",
-    # Common anchor-stuffed number patterns (used in hidden links)
+
+# CertSpotter (SSLMate) - free tier works keyless at 100 req/hour per IP.
+# Set CERTSPOTTER_API_KEY in env for higher rate limits.
+CERTSPOTTER_API_KEY: str | None = os.environ.get("CERTSPOTTER_API_KEY") or None
+CERTSPOTTER_URL = "https://api.certspotter.com/v1/issuances"
+
+# Censys v2 certs search - requires account (free tier = 250 queries/month).
+# Sign up at https://search.censys.io and set both env vars.
+CENSYS_API_ID:     str | None = os.environ.get("CENSYS_API_ID") or None
+CENSYS_API_SECRET: str | None = os.environ.get("CENSYS_API_SECRET") or None
+CENSYS_SEARCH_URL = "https://search.censys.io/api/v2/certificates/search"
+
+# Subfinder binary (ProjectDiscovery). Install from https://github.com/projectdiscovery/subfinder
+# Only invoked as last-resort fallback if all CT sources are dead.
+SUBFINDER_BIN = os.environ.get("SUBFINDER_BIN", "subfinder")
+SUBFINDER_TIMEOUT = 300  # seconds; .go.id namespace can take several minutes
+
+# ---------------------------------------------------------------------------
+# Gambling keywords (Bahasa Indonesia + common variants), tier-weighted.
+# Tier A: diagnostic, near-zero false-positive on legit .go.id pages
+# Tier B: medium signal, typical SEO-injection boilerplate
+# Tier C: noisy - only strong in clusters (>=3 hits)
+# ---------------------------------------------------------------------------
+import re as _re
+
+KEYWORDS_TIER_A: list[str] = [
+    "slot gacor", "rtp slot", "rtp live", "pg soft", "pragmatic play",
+    "mahjong ways", "sweet bonanza", "gates of olympus", "starlight princess",
+    "sbobet", "maxwin", "scatter", "gacor", "zeus slot", "habanero", "jackpot",
+    # Common anchor-stuffed number patterns (regex below also catches variants)
     "slot138", "slot777", "slot303", "slot88", "slot99",
-    # SGP/HK lottery terms
+]
+
+KEYWORDS_TIER_B: list[str] = [
+    "judi bola", "judi slot", "toto slot", "link alternatif", "bandar",
+    "situs judi", "agen judi", "bandar judi", "agen slot",
+    "bocoran slot", "link slot", "daftar slot", "login slot", "deposit slot",
+    "taruhan bola", "taruhan online", "poker online", "casino online",
+    "online casino", "sportsbook",
+]
+
+KEYWORDS_TIER_C: list[str] = [
+    "judi", "judi online", "togel", "togel online", "slot online",
+    "toto", "taruhan", "betting", "mahjong",
     "4d", "3d", "2d", "sgp", "sydney", "sdy", "hk togel", "live draw",
-    # English crossover terms
-    "sportsbook", "betting", "online casino",
+]
+
+# Back-compat composite. detect.py imports this symbol; keep it aggregated.
+GAMBLING_KEYWORDS: list[str] = KEYWORDS_TIER_A + KEYWORDS_TIER_B + KEYWORDS_TIER_C
+
+# Brand-number / typosquatted patterns that literal keywords miss.
+# Real-world example: togel138gratisss30k.cyou
+GAMBLING_REGEX: list[_re.Pattern[str]] = [
+    _re.compile(r"slot\d{2,4}", _re.IGNORECASE),
+    _re.compile(r"togel\d+\w*", _re.IGNORECASE),
+    _re.compile(r"rtp\s*slot", _re.IGNORECASE),
 ]
 
 # ---------------------------------------------------------------------------

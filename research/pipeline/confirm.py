@@ -21,8 +21,9 @@ Per suspected domain (async Playwright, concurrency = PLAYWRIGHT_CONCURRENCY):
 
 Output columns:
   domain, confirmed_infected, confidence_score, cloaking_detected,
-  js_redirect, meta_redirect, keyword_count, injected_link_count,
-  screenshot_path, screenshot_sha256, page_title, confirmed_at
+  hidden_seo_injection, js_redirect, meta_redirect, keyword_count,
+  keyword_tier_breakdown, injected_link_count, screenshot_path,
+  screenshot_sha256, page_title, confirmed_at
 """
 
 import asyncio
@@ -50,9 +51,11 @@ FIELDNAMES = [
     "confirmed_infected",
     "confidence_score",
     "cloaking_detected",
+    "hidden_seo_injection",
     "js_redirect",
     "meta_redirect",
     "keyword_count",
+    "keyword_tier_breakdown",
     "injected_link_count",
     "screenshot_path",
     "screenshot_sha256",
@@ -60,9 +63,9 @@ FIELDNAMES = [
     "confirmed_at",
 ]
 
-_KW_PATTERNS = [
-    re.compile(re.escape(kw), re.IGNORECASE) for kw in cfg.GAMBLING_KEYWORDS
-]
+_KW_PATTERNS_A = [re.compile(re.escape(k), re.IGNORECASE) for k in cfg.KEYWORDS_TIER_A]
+_KW_PATTERNS_B = [re.compile(re.escape(k), re.IGNORECASE) for k in cfg.KEYWORDS_TIER_B]
+_KW_PATTERNS_C = [re.compile(re.escape(k), re.IGNORECASE) for k in cfg.KEYWORDS_TIER_C]
 
 _GAMBLING_SIGNAL = re.compile(
     r"(slot|judi|togel|casino|betting|poker|gacor|maxwin|sbobet|scatter|toto|zeus|bandar)",
@@ -105,21 +108,32 @@ def _append_checkpoint(domain: str) -> None:
 # Keyword matching
 # ---------------------------------------------------------------------------
 
-def _match_keywords(text: str) -> set[str]:
+def _match_tiered(text: str) -> dict[str, set[str]]:
     """
-    Return set of GAMBLING_KEYWORDS that appear in text.
+    Return matched gambling keywords partitioned by tier.
+
+    Tier A / B / C come from cfg.KEYWORDS_TIER_*. Regex hits from
+    cfg.GAMBLING_REGEX (brand-number patterns) are counted as Tier A.
 
     Args:
         text: Plaintext or HTML string.
 
     Returns:
-        Set of matched keyword strings.
+        {"A": set[str], "B": set[str], "C": set[str]}
     """
-    return {
-        cfg.GAMBLING_KEYWORDS[i]
-        for i, pat in enumerate(_KW_PATTERNS)
-        if pat.search(text)
-    }
+    if not text:
+        return {"A": set(), "B": set(), "C": set()}
+    a = {cfg.KEYWORDS_TIER_A[i] for i, p in enumerate(_KW_PATTERNS_A) if p.search(text)}
+    b = {cfg.KEYWORDS_TIER_B[i] for i, p in enumerate(_KW_PATTERNS_B) if p.search(text)}
+    c = {cfg.KEYWORDS_TIER_C[i] for i, p in enumerate(_KW_PATTERNS_C) if p.search(text)}
+    for pat in cfg.GAMBLING_REGEX:
+        for m in pat.finditer(text):
+            a.add(m.group(0).lower())
+    return {"A": a, "B": b, "C": c}
+
+
+def _flatten(tiered: dict[str, set[str]]) -> set[str]:
+    return tiered["A"] | tiered["B"] | tiered["C"]
 
 
 # ---------------------------------------------------------------------------
@@ -127,49 +141,58 @@ def _match_keywords(text: str) -> set[str]:
 # ---------------------------------------------------------------------------
 
 def _compute_confidence(
-    keyword_count: int,
+    tier_counts: dict[str, int],
     injected_link_count: int,
     js_redirect: bool,
     meta_redirect: bool,
     cloaking_detected: bool,
+    hidden_seo_injection: bool,
 ) -> int:
     """
-    Compute an infection confidence score from 0 to 100.
+    Compute an infection confidence score from 0 to 100 with tier weighting.
 
-    Scoring rationale:
-      - Keywords in rendered DOM: strongest signal (content injection confirmed)
-      - Cloaking: high signal (attacker hides content from non-browser scrapers)
-      - JS redirect: high signal (browser hijacking)
-      - Meta refresh: moderate signal (passive redirect)
-      - Injected gambling links: moderate signal
+    Scoring:
+      Tier A: 15 pts each, cap 50 (diagnostic - 1 hit is near-definite)
+      Tier B: 8 pts each, cap 30
+      Tier C: 5 pts each, only after >=3 hits (noisy in isolation)
+      Links:  >=50 +30 / >=10 +25 / >=5 +15 / >=1 +10
+      JS-injected cloaking:  +20
+      Hidden SEO (CSS-hidden): +20
+      JS redirect:  +25
+      Meta refresh: +20
 
     Args:
-        keyword_count:       Number of gambling keywords in rendered DOM.
+        tier_counts:         {"A": int, "B": int, "C": int} distinct-keyword counts.
         injected_link_count: Count of gambling-signal anchor tags.
-        js_redirect:         True if page redirected to a gambling domain.
-        meta_redirect:       True if meta http-equiv=refresh points to gambling domain.
-        cloaking_detected:   True if keywords appear in rendered but not raw HTML.
+        js_redirect:         True if page navigated to a gambling domain.
+        meta_redirect:       True if meta http-equiv=refresh points to gambling.
+        cloaking_detected:   Rendered DOM has gambling kw raw HTML did not.
+        hidden_seo_injection: Raw HTML has gambling kw that visible text does not.
 
     Returns:
         Integer score in [0, 100].
     """
     score = 0
-    if keyword_count >= 10:
-        score += 50
-    elif keyword_count >= 5:
-        score += 40
-    elif keyword_count > 0:
+    score += min(tier_counts.get("A", 0) * 15, 50)
+    score += min(tier_counts.get("B", 0) * 8, 30)
+    if tier_counts.get("C", 0) >= 3:
+        score += tier_counts["C"] * 5
+    if injected_link_count >= 50:
         score += 30
+    elif injected_link_count >= 10:
+        score += 25
+    elif injected_link_count >= 5:
+        score += 15
+    elif injected_link_count >= 1:
+        score += 10
     if cloaking_detected:
+        score += 20
+    if hidden_seo_injection:
         score += 20
     if js_redirect:
         score += 25
     if meta_redirect:
         score += 20
-    if injected_link_count >= 5:
-        score += 15
-    elif injected_link_count > 0:
-        score += 10
     return min(score, 100)
 
 
@@ -261,23 +284,26 @@ async def _confirm_domain(
     """
     async with semaphore:
         row = {
-            "domain":            domain,
-            "confirmed_infected": False,
-            "confidence_score":  0,
-            "cloaking_detected": False,
-            "js_redirect":       False,
-            "meta_redirect":     False,
-            "keyword_count":     0,
-            "injected_link_count": 0,
-            "screenshot_path":   "",
-            "screenshot_sha256": "",
-            "page_title":        "",
-            "confirmed_at":      cfg.now_wib(),
+            "domain":               domain,
+            "confirmed_infected":   False,
+            "confidence_score":     0,
+            "cloaking_detected":    False,
+            "hidden_seo_injection": False,
+            "js_redirect":          False,
+            "meta_redirect":        False,
+            "keyword_count":        0,
+            "keyword_tier_breakdown": "A:0|B:0|C:0",
+            "injected_link_count":  0,
+            "screenshot_path":      "",
+            "screenshot_sha256":    "",
+            "page_title":           "",
+            "confirmed_at":         cfg.now_wib(),
         }
 
         # --- Baseline: raw HTML keywords (no JS) ---
         raw_html = await _fetch_raw_html(domain)
-        raw_kw_set = _match_keywords(raw_html) if raw_html else set()
+        raw_tiered = _match_tiered(raw_html)
+        raw_kw_set = _flatten(raw_tiered)
 
         # --- Check meta refresh in raw HTML ---
         if raw_html:
@@ -322,22 +348,44 @@ async def _confirm_domain(
                             row["js_redirect"] = True
                             break
 
-                # Rendered text -> keyword set
+                # Rendered DOM - use outerHTML (sees CSS-hidden content too)
+                # for the scoring kw set, and innerText (visible-only) for
+                # inverse-cloaking detection.
                 try:
-                    rendered_text = await page.evaluate(
+                    rendered_outer = await page.evaluate(
+                        "document.body ? document.body.outerHTML : ''"
+                    )
+                except Exception:
+                    rendered_outer = ""
+                try:
+                    rendered_visible = await page.evaluate(
                         "document.body ? document.body.innerText : ''"
                     )
-                    rendered_kw_set = _match_keywords(rendered_text)
                 except Exception:
-                    rendered_kw_set = set()
+                    rendered_visible = ""
+
+                rendered_tiered = _match_tiered(rendered_outer)
+                rendered_kw_set = _flatten(rendered_tiered)
+                visible_kw_set  = _flatten(_match_tiered(rendered_visible))
 
                 row["keyword_count"] = len(rendered_kw_set)
+                row["keyword_tier_breakdown"] = (
+                    f"A:{len(rendered_tiered['A'])}"
+                    f"|B:{len(rendered_tiered['B'])}"
+                    f"|C:{len(rendered_tiered['C'])}"
+                )
 
-                # Cloaking: keywords appear in rendered DOM but NOT in raw HTML
+                # Cloaking: rendered DOM has kw the raw HTML did not
+                # (JS-injected content hidden from non-browser scrapers).
                 cloaking_signals = rendered_kw_set - raw_kw_set
                 row["cloaking_detected"] = bool(cloaking_signals)
                 if cloaking_signals:
                     log.debug("Cloaking on %s: JS-only kw = %s", domain, cloaking_signals)
+
+                # Hidden SEO: raw HTML contains gambling kw that the visible
+                # rendered text does not (CSS display:none / off-screen etc).
+                hidden_signals = raw_kw_set - visible_kw_set
+                row["hidden_seo_injection"] = bool(raw_kw_set) and bool(hidden_signals)
 
                 # Injected gambling links
                 try:
@@ -352,16 +400,22 @@ async def _confirm_domain(
 
                 # Confidence + infection decision
                 row["confidence_score"] = _compute_confidence(
-                    row["keyword_count"],
+                    {k: len(v) for k, v in rendered_tiered.items()},
                     row["injected_link_count"],
                     row["js_redirect"],
                     row["meta_redirect"],
                     row["cloaking_detected"],
+                    row["hidden_seo_injection"],
                 )
                 row["confirmed_infected"] = row["confidence_score"] >= 40
 
                 # Screenshot if any infection signal
-                if row["confirmed_infected"] or row["cloaking_detected"] or row["meta_redirect"]:
+                if (
+                    row["confirmed_infected"]
+                    or row["cloaking_detected"]
+                    or row["hidden_seo_injection"]
+                    or row["meta_redirect"]
+                ):
                     row["screenshot_path"], row["screenshot_sha256"] = (
                         await _take_screenshot(page, domain)
                     )
