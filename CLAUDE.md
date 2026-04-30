@@ -1,40 +1,20 @@
-# CLAUDE.md - PantauInd Context
+# CLAUDE.md - PantauInd Web Tool
 
 ## What This Project Is
 
-PantauInd is a personal security research project by Calvin Wirathama Katoroy (Computer Engineering, Universitas Indonesia). It serves two purposes:
+PantauInd is a personal security project by Calvin Wirathama Katoroy (Computer Engineering, Universitas Indonesia). This branch hosts the **web scanner tool** - a FastAPI + React application that detects gambling SEO injection and passive vulnerability surfaces on `.go.id` / `.ac.id` domains.
 
-1. **Web scanner tool** (`main` branch) - FastAPI + React application that detects gambling SEO injection and passive vulnerability surfaces on `.go.id` / `.ac.id` domains
-2. **Research CLI pipeline** (`research-pipeline` branch) - 5-stage data collection and statistical analysis instrument for an empirical study
+The accompanying empirical research (national-scale data collection and statistical analysis CLI) lives on the `research-pipeline` branch.
 
-The problem: thousands of Indonesian government websites are compromised with gambling SEO injection. Existing work detects the infection but nobody has empirically studied what vulnerability characteristics make domains susceptible. This project bridges that gap.
+The problem: thousands of Indonesian government websites are compromised with gambling SEO injection. This tool sweeps the namespace, surfaces evidence with CVSS-lite scores and screenshots, and produces PDF reports for disclosure to BSSN / Komdigi.
 
 ## Repository Branches
 
-- `main` - web tool, stable, do not break
-- `research-pipeline` - CLI pipeline, active development
+- `main` - stable web tool baseline
+- `web-tool` - active web tool development (this branch)
+- `research-pipeline` - separate CLI pipeline for thesis data collection
 
-## Research Title
-
-Attack Surface Profiling of Gambling-Injected Indonesian Government Websites Using Passive Web Reconnaissance: A National-Scale Empirical Study
-
-## Research Questions
-
-- **RQ1:** Prevalence and distribution of gambling SEO injection on `.go.id` at national scale
-- **RQ2:** Attack surface characteristics of infected vs. clean domains (security headers, exposed paths, CMS, version disclosure)
-- **RQ3:** Statistical correlation between vulnerability features and infection status (chi-square + logistic regression)
-
-## Pipeline (research-pipeline branch)
-
-```
-enumerate.py  ->  crt.sh / Subfinder  ->  data/raw/domains.csv
-detect.py     ->  httpx + BS4         ->  data/interim/suspected.csv
-confirm.py    ->  Playwright          ->  data/processed/confirmed.csv
-surface.py    ->  httpx passive       ->  data/processed/attack_surface.csv
-analysis.py   ->  statsmodels         ->  data/tables/ + data/figures/
-```
-
-## Web Tool Architecture (main branch)
+## Architecture
 
 ```
 React Frontend (Vite + Tailwind, dark theme)
@@ -60,8 +40,6 @@ Infrastructure (docker-compose):
 
 ## Tech Stack
 
-### Web Tool (main)
-
 | Layer | Tech |
 | --- | --- |
 | Frontend | React 18 + Tailwind CSS (Vite), dark theme |
@@ -78,24 +56,11 @@ Infrastructure (docker-compose):
 | Deployment | Docker Compose / Fly.io (sin region) |
 | CI/CD | GitHub Actions |
 
-### Research Pipeline (research-pipeline)
-
-| Layer | Tech |
-| --- | --- |
-| Enumeration | crt.sh API, Subfinder |
-| Detection | httpx async, BeautifulSoup |
-| Confirmation | Playwright async (concurrency=8) |
-| Profiling | httpx GET-only passive recon |
-| Analysis | statsmodels, scipy, pandas, seaborn |
-| Environment | Google Colab (analysis stage) |
-
 ## Absolute Constraints
 
 - **Passive recon ONLY** - GET requests, zero payload injection, no active exploitation
-- **No database for research pipeline** - CSV files only (pandas)
 - **Python 3.11+**
 - **Windows compatible** (d:/pantauin) AND Linux portable
-- **data/ is gitignored entirely** - never commit domain lists or scan results
 - **No em dashes** - use hyphens in all source code, comments, and documentation
 - **No ML for detection** - rule-based keyword matching is deliberate (explainability for evidence)
 - **Scraper contract** - every scanner module returns: `{"module": "<name>", "status": "success"|"error"|"skipped", "findings": [...]|null, "error": "..."|null}`
@@ -104,7 +69,7 @@ Infrastructure (docker-compose):
 - **Celery beat: single instance** - never scale > 1
 - **No supervisor mentioned** - this is a personal project
 
-## Key Design Decisions (Web Tool)
+## Key Design Decisions
 
 - **Evidence storage abstracted** via core/storage.py (local disk or S3/R2)
 - **TLD sweep auto-detection** - input starting with `.` triggers namespace sweep
@@ -118,51 +83,19 @@ Infrastructure (docker-compose):
 - **Scan diff fingerprinting** - dork_sweep uses (module, url); others use (module, url, title)
 - **Finding lifecycle is analyst-controlled** - diff engine sets delta_tag but never changes lifecycle_status
 
-## Key Design Decisions (Research Pipeline)
+## Severity Scoring
 
-- **httpx + BS4 for bulk detection** - speed, no browser overhead for 20-50k domains
-- **Playwright only for suspected ~5%** - RAM efficiency on 16GB laptop
-- **statsmodels Logit, not sklearn** - thesis needs p-values, 95% CI, interpretable coefficients
-- **All domains profiled** (infected + clean) - control group for chi-square and logistic regression
-- **crt.sh + Subfinder** - free, no rate limits, comprehensive CT log coverage
-- **CSV for all data** - simple, portable, pandas-native, Colab-friendly
+| Severity | CVSS-lite base |
+| --- | --- |
+| Critical | 9.0-9.8 |
+| High | 6.5-8.5 |
+| Medium | 4.5-5.5 |
+| Low | 3.0 |
+| Info | 1.0 |
 
-## Statistical Analysis
+Evidence modifiers: +0.3 screenshot, +0.4 >=10 keywords, +0.2 >=5 keywords, +0.3 >=3 injected links. Capped at 10.0.
 
-- Chi-square per feature + Bonferroni correction
-- Fisher's exact fallback if expected cell < 5
-- Logistic regression: OR, 95% CI, p-value, pseudo-R-squared, AIC
-- VIF check for multicollinearity (flag if VIF > 10)
-- Hosmer-Lemeshow goodness-of-fit
-- Output: CSV + LaTeX tables, PNG 300 DPI figures
-
-## Prior Work to Be Aware Of
-
-**Gambling detection (detection only, no vuln profiling):**
-- Nurseno et al. 2024 (MATRIK) - Python scraping, 450k .go.id
-- Zagi et al. 2025 (ArXiv) - dork + crawl, 1-month measurement
-- Riyadi et al. 2025 (bit-Tech) - RF + SVM classifier
-- Teppap et al. 2024 (IEEE JCSSE) - BeautifulSoup detection
-
-**Methodology anchors (vulnerability correlation):**
-- Vasek & Moore 2016 (IEEE TDSC) - CMS as compromise risk factor
-- Kovacevic et al. 2022 (SoftCOM) - website features predict compromise
-- Harry et al. 2025 (J. Cybersecurity) - national-scale US gov attack surface
-- Kasturi et al. 2023 (IEEE ITNAC) - vulnerability features as compromise indicators
-
-**Indonesian gov security (no gambling ground truth):**
-- Almaarif et al. 2020 (IJASET) - .go.id security headers
-- Darojat et al. 2022 (JSIB) - specific .go.id domain assessment
-- Suyitno et al. 2024 (ICETIA) - passive vuln assessment of Indonesian gov
-
-## Output Formats
-
-- All data: CSV (pandas)
-- All figures: PNG 300 DPI (seaborn/matplotlib)
-- All tables: .csv + .tex (paste-ready LaTeX)
-- Timestamps: WIB (UTC+7), ISO 8601
-
-## API Endpoints (Web Tool)
+## API Endpoints
 
 | Method | Path | Description |
 | --- | --- | --- |
@@ -188,7 +121,7 @@ Infrastructure (docker-compose):
 
 Auth endpoints (no global auth required): `/api/auth/setup-required`, `/api/auth/setup`, `/api/auth/login`, `/api/auth/me`, `/api/auth/users` (CRUD).
 
-## File Structure (Web Tool)
+## File Structure
 
 ```
 backend/
@@ -239,18 +172,6 @@ frontend/
 │   └── components/          Input, results, shared
 ```
 
-## Severity Scoring
-
-| Severity | CVSS-lite base |
-| --- | --- |
-| Critical | 9.0-9.8 |
-| High | 6.5-8.5 |
-| Medium | 4.5-5.5 |
-| Low | 3.0 |
-| Info | 1.0 |
-
-Evidence modifiers: +0.3 screenshot, +0.4 >=10 keywords, +0.2 >=5 keywords, +0.3 >=3 injected links. Capped at 10.0.
-
 ## Conventions
 
 - Python: type hints, async routes, Pydantic v2
@@ -263,7 +184,5 @@ Evidence modifiers: +0.3 screenshot, +0.4 >=10 keywords, +0.2 >=5 keywords, +0.3
 
 ## Do Not Touch
 
-- `backend/` and `frontend/` code unless explicitly asked
-- `data/` folder (gitignored, never commit)
-- `main` branch pipeline code (stable tool)
-- Statistical methodology (scoped for specific research design)
+- `data/` folder if present (gitignored, never commit)
+- Statistical methodology (lives on `research-pipeline` branch, not here)

@@ -1,6 +1,0 @@
-# Runtime data - never commit
-data/
-__pycache__/
-*.pyc
-*.pyo
-.pytest_cache/
